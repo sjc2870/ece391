@@ -8,95 +8,129 @@
 #include "i8259.h"
 #include "debug.h"
 #include "tests.h"
+#include "vga.h"
 
 #define RUN_TESTS
 
-/* Macros. */
-/* Check if the bit BIT in FLAGS is set. */
-#define CHECK_FLAG(flags, bit)   ((flags) & (1 << (bit)))
 
-/* Check if MAGIC is valid and print the Multiboot information structure
-   pointed by ADDR. */
+extern int syscall_handler();
+extern int timer_handler();
+
+/*
+ * The only difference between trap and interrupt is that
+ * interrupt gate will disable interrupt auto and trap gate will not.
+ */
+#define TRAP_GATE 15
+#define INTR_GATE 14
+#define SYSTEM_GATE TRAP_GATE
+
+#define KERNEL_RPL 0
+#define USER_RPL   3
+
+#define APIC_LOCAL_TIMER_ONESHOT_MODE  (0)
+#define APIC_LOCAL_TIMER_PERIODIC_MODE (1 << 17)
+#define APIC_LOCAL_TIMER_TSCDDL_MODE   (2 << 17)
+#define APIC_LOCAL_TIMER_DELIVERT_IDLE (0)
+#define APIC_LOCAL_TIMER_DELIVERT_PENDING (1 << 11)
+
+#define LOCAL_APIC_TIMER 0xbf
+
+static void _set_gate(idt_desc_t *gate, int type, int dpl, void *addr)
+{
+    memset(gate, 0, sizeof(*gate));
+    gate->dpl = dpl;
+    gate->present = 1;
+    gate->type = type;
+    gate->seg_selector = KERNEL_CS;
+    SET_IDT_ENTRY(*gate, addr);
+}
+
+static void set_trap_gate(unsigned int n, void *addr)
+{
+    _set_gate(&idt[n], TRAP_GATE, KERNEL_RPL, addr);
+}
+
+static void set_intr_gate(unsigned int n, void *addr)
+{
+    _set_gate(&idt[n], INTR_GATE, KERNEL_RPL, addr);
+}
+
+static void set_system_gate(unsigned int n, void *addr)
+{
+    _set_gate(&idt[n], SYSTEM_GATE, USER_RPL, addr);
+}
+
+void setup_idt()
+{
+    /* 0-31 is reserved, see "EXCEPTION AND INTERRUPT VECTORS" in intel manual volume2 */
+    lidt(idt_desc_ptr);
+    printf("done\n");
+}
+
+static bool detect_apic()
+{
+        uint32_t regs[4] = {0};
+
+        cpuid(1, regs);
+
+        if (CHECK_FLAG(regs[3], 9)) {
+            printf("APIC present\n");
+            return true;
+        } else {
+            printf("WARNING APIC absent\n");
+            return false;
+        }
+}
+
+static uint8_t get_apic_id()
+{
+        uint32_t regs[4] = {0};
+
+        cpuid(1, regs);
+
+        if (CHECK_FLAG(regs[3], 9)) {
+            printf("APIC present\n");
+            return true;
+        } else {
+            printf("WARNING APIC absent\n");
+            return false;
+        }
+
+        return (regs[3] >> 24);
+}
+
 void entry(unsigned long magic, unsigned long addr) {
 
-    multiboot_info_t *mbi;
+    uint8_t apic_id = 0;
 
-    /* Clear the screen. */
-    clear();
+    console_init();
+    /*
+     * Check if MAGIC is valid and print the Multiboot information structure
+     * pointed by ADDR.
+     */
+    multiboot_info(magic, addr);
 
-    /* Am I booted by a Multiboot-compliant boot loader? */
-    if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
-        printf("Invalid magic number: 0x%#x\n", (unsigned)magic);
-        return;
-    }
+    apic_id = get_apic_id();
 
-    /* Set MBI to the address of the Multiboot information structure. */
-    mbi = (multiboot_info_t *) addr;
+    {
+        char vendor[12];
+        uint32_t regs[4];
 
-    /* Print out the flags. */
-    printf("flags = 0x%#x\n", (unsigned)mbi->flags);
+        cpuid(0, regs);
+        ((unsigned *)vendor)[0] = regs[1]; // EBX
+        ((unsigned *)vendor)[1] = regs[3]; // EDX
+        ((unsigned *)vendor)[2] = regs[2]; // ECX
 
-    /* Are mem_* valid? */
-    if (CHECK_FLAG(mbi->flags, 0))
-        printf("mem_lower = %uKB, mem_upper = %uKB\n", (unsigned)mbi->mem_lower, (unsigned)mbi->mem_upper);
-
-    /* Is boot_device valid? */
-    if (CHECK_FLAG(mbi->flags, 1))
-        printf("boot_device = 0x%#x\n", (unsigned)mbi->boot_device);
-
-    /* Is the command line passed? */
-    if (CHECK_FLAG(mbi->flags, 2))
-        printf("cmdline = %s\n", (char *)mbi->cmdline);
-
-    if (CHECK_FLAG(mbi->flags, 3)) {
-        int mod_count = 0;
-        int i;
-        module_t* mod = (module_t*)mbi->mods_addr;
-        while (mod_count < mbi->mods_count) {
-            printf("Module %d loaded at address: 0x%#x\n", mod_count, (unsigned int)mod->mod_start);
-            printf("Module %d ends at address: 0x%#x\n", mod_count, (unsigned int)mod->mod_end);
-            printf("First few bytes of module:\n");
-            for (i = 0; i < 16; i++) {
-                printf("0x%x ", *((char*)(mod->mod_start+i)));
-            }
-            printf("\n");
-            mod_count++;
-            mod++;
-        }
-    }
-    /* Bits 4 and 5 are mutually exclusive! */
-    if (CHECK_FLAG(mbi->flags, 4) && CHECK_FLAG(mbi->flags, 5)) {
-        printf("Both bits 4 and 5 are set.\n");
-        return;
-    }
-
-    /* Is the section header table of ELF valid? */
-    if (CHECK_FLAG(mbi->flags, 5)) {
-        elf_section_header_table_t *elf_sec = &(mbi->elf_sec);
-        printf("elf_sec: num = %u, size = 0x%#x, addr = 0x%#x, shndx = 0x%#x\n",
-                (unsigned)elf_sec->num, (unsigned)elf_sec->size,
-                (unsigned)elf_sec->addr, (unsigned)elf_sec->shndx);
-    }
-
-    /* Are mmap_* valid? */
-    if (CHECK_FLAG(mbi->flags, 6)) {
-        memory_map_t *mmap;
-        printf("mmap_addr = 0x%#x, mmap_length = 0x%x\n",
-                (unsigned)mbi->mmap_addr, (unsigned)mbi->mmap_length);
-        for (mmap = (memory_map_t *)mbi->mmap_addr;
-                (unsigned long)mmap < mbi->mmap_addr + mbi->mmap_length;
-                mmap = (memory_map_t *)((unsigned long)mmap + mmap->size + sizeof (mmap->size)))
-            printf("    size = 0x%x, base_addr = 0x%#x%#x\n    type = 0x%x,  length    = 0x%#x%#x\n",
-                    (unsigned)mmap->size,
-                    (unsigned)mmap->base_addr_high,
-                    (unsigned)mmap->base_addr_low,
-                    (unsigned)mmap->type,
-                    (unsigned)mmap->length_high,
-                    (unsigned)mmap->length_low);
+        cpuid(1, regs);
+        unsigned logical = (regs[1] >> 16) & 0xff;
+        printf("there are %u logical cores\n", logical);
+        cpuid(4, regs);
+        uint32_t cores = ((regs[0] >> 26) & 0x3f) + 1;
+        printf("there are %u physical cores\n", cores);
     }
 
     /* Construct an LDT entry in the GDT */
-    {
+    /* {
         seg_desc_t the_ldt_desc;
         the_ldt_desc.granularity = 0x0;
         the_ldt_desc.opsize      = 0x1;
@@ -110,10 +144,10 @@ void entry(unsigned long magic, unsigned long addr) {
         SET_LDT_PARAMS(the_ldt_desc, &ldt, ldt_size);
         ldt_desc_ptr = the_ldt_desc;
         lldt(KERNEL_LDT);
-    }
+    } */
 
     /* Construct a TSS entry in the GDT */
-    {
+    /* {
         seg_desc_t the_tss_desc;
         the_tss_desc.granularity   = 0x0;
         the_tss_desc.opsize        = 0x0;
@@ -132,12 +166,16 @@ void entry(unsigned long magic, unsigned long addr) {
 
         tss.ldt_segment_selector = KERNEL_LDT;
         tss.ss0 = KERNEL_DS;
-        tss.esp0 = 0x800000;
+        tss.esp0 = 0x800000;  // stack top 8MB
         ltr(KERNEL_TSS);
-    }
+    } */
 
+    if (detect_apic() == false)
+        return;
     /* Init the PIC */
     i8259_init();
+
+    setup_idt();
 
     /* Initialize devices, memory, filesystem, enable device interrupts on the
      * PIC, any other initialization stuff... */

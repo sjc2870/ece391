@@ -48,3 +48,9 @@ syscalls/
     functions have also been written (things like strlen, strcpy, etc.)
     that are used by the utility programs.  The Makefile is set up to
 	build these programs for your OS.
+
+USAGE
+========================================
+1. make clean && make dep && make
+2. ./q in one window, gdb bootimage in another window
+3. killall qemu-system-i386

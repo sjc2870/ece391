@@ -474,3 +474,9 @@ void test_interrupts(void) {
         video_mem[i << 1]++;
     }
 }
+
+void panic(uint8_t *format, ...)
+{
+    // printf(format, args);
+    /* todo: reboot */
+}

@@ -47,6 +47,24 @@ typedef struct multiboot_info {
     elf_section_header_table_t elf_sec;
     uint32_t mmap_length;
     uint32_t mmap_addr;
+    uint32_t drive_length;
+    uint32_t drive_addr;
+    uint32_t config_table;
+    uint32_t boot_loader_name;
+    uint32_t apm_table;
+    uint32_t vbe_control_info;
+    uint32_t vbe_mode_info;
+    uint16_t vbe_mode;
+    uint16_t vbe_interface_seg;
+    uint16_t vbe_interface_off;
+    uint16_t vbe_interface_len;
+    uint64_t frame_buffer_addr;
+    uint32_t frame_buffer_pitch;
+    uint32_t framebuffer_width;
+    uint32_t framebuffer_height;
+    uint32_t framebuffer_bpp : 1;
+    uint32_t framebuffer_type: 1;
+    uint32_t color_info : 5;
 } multiboot_info_t;
 
 typedef struct module {
@@ -66,6 +84,18 @@ typedef struct memory_map {
     uint32_t length_high;
     uint32_t type;
 } memory_map_t;
+
+struct drive_struct {
+    uint32_t size;
+    uint32_t drive_number : 1;
+    uint32_t drive_mode : 1;
+    uint32_t drive_cylinders : 2;
+    uint32_t drive_heads : 1;
+    uint32_t drive_sectors : 1;
+    uint8_t drive_ports[0];
+};
+
+extern void multiboot_info(unsigned long magic, unsigned long addr);
 
 #endif /* ASM */
 

@@ -9,7 +9,7 @@
 .globl ldt_size, tss_size
 .globl gdt_desc, ldt_desc, tss_desc
 .globl tss, tss_desc_ptr, ldt, ldt_desc_ptr
-.globl gdt_ptr
+.globl gdt_ptr, gdt
 .globl idt_desc_ptr, idt
 
 .align 4
@@ -43,7 +43,16 @@ _gdt:
 
     # NULL entry
     .quad 0
-
+    .quad 0x00CF9A000000FFFF # kernel cs
+    .quad 0x00CF92000000FFFF # kernel ds
+    .quad 0x00CFFA000000FFFF # user cs
+    .quad 0x00CFF2000000FFFF # user ds
+    .quad 0x00CFF2000000FFFF # kernel tss
+    .quad 0x00CFF2000000FFFF # kernel ldt
+    .rept 250
+    .quad 0
+    .endr
+gdt_end:
     # Segmentation will not be used
     # CS and DS both are 0-4GB r/w segments
     #
@@ -61,7 +70,12 @@ _gdt:
     # |                                    |                                 |
     # |----------------------------------------------------------------------|
 
-gdt_ptr:
+gdt_desc:
+    .word gdt_end - gdt - 1
+    .long gdt
+
+gdt_ptr: # address 0x000400d0
+    .quad 0
     # Set up an entry for kernel CS
     .quad 0x00CF9A000000FFFF
 

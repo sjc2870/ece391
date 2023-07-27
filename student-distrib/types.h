@@ -8,10 +8,17 @@
 #define _TYPES_H
 
 #define NULL 0
+#define bool char
+#define false 0
+#define true 1
 
 #ifndef ASM
 
+
 /* Types defined here just like in <stdint.h> */
+typedef long long int64_t;
+typedef unsigned long long uint64_t;
+
 typedef int int32_t;
 typedef unsigned int uint32_t;
 
@@ -20,6 +27,11 @@ typedef unsigned short uint16_t;
 
 typedef char int8_t;
 typedef unsigned char uint8_t;
+
+typedef uint16_t u16;
+typedef uint8_t  u8;
+typedef uint32_t u32;
+typedef uint64_t u64;
 
 #endif /* ASM */
 

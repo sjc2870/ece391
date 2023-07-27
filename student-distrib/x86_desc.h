@@ -9,12 +9,12 @@
 #include "types.h"
 
 /* Segment selector values */
-#define KERNEL_CS   0x0010
-#define KERNEL_DS   0x0018
-#define USER_CS     0x0023
-#define USER_DS     0x002B
-#define KERNEL_TSS  0x0030
-#define KERNEL_LDT  0x0038
+#define KERNEL_CS   0x0010 // idx 2
+#define KERNEL_DS   0x0018 // idx 3
+#define USER_CS     0x0023 // idx 4
+#define USER_DS     0x002B // idx 5
+#define KERNEL_TSS  0x0030 // idx 6
+#define KERNEL_LDT  0x0038 // idx 7
 
 /* Size of the task state segment (TSS) */
 #define TSS_SIZE    104
@@ -151,10 +151,7 @@ typedef union idt_desc_t {
         uint16_t offset_15_00;
         uint16_t seg_selector;
         uint8_t  reserved4;
-        uint32_t reserved3 : 1;
-        uint32_t reserved2 : 1;
-        uint32_t reserved1 : 1;
-        uint32_t size      : 1;
+        uint32_t type      : 4;
         uint32_t reserved0 : 1;
         uint32_t dpl       : 2;
         uint32_t present   : 1;
@@ -165,13 +162,13 @@ typedef union idt_desc_t {
 /* The IDT itself (declared in x86_desc.S */
 extern idt_desc_t idt[NUM_VEC];
 /* The descriptor used to load the IDTR */
-extern x86_desc_t idt_desc_ptr;
+extern x86_desc_t* idt_desc_ptr;
 
 /* Sets runtime parameters for an IDT entry */
 #define SET_IDT_ENTRY(str, handler)                              \
 do {                                                             \
-    str.offset_31_16 = ((uint32_t)(handler) & 0xFFFF0000) >> 16; \
-    str.offset_15_00 = ((uint32_t)(handler) & 0xFFFF);           \
+    (str).offset_31_16 = ((uint32_t)(handler) & 0xFFFF0000) >> 16; \
+    (str).offset_15_00 = ((uint32_t)(handler) & 0xFFFF);           \
 } while (0)
 
 /* Load task register.  This macro takes a 16-bit index into the GDT,
