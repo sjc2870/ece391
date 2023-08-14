@@ -26,11 +26,10 @@
 
 /* This structure is used to load descriptor base registers
  * like the GDTR and IDTR */
-typedef struct x86_desc {
-    uint16_t padding;
+struct x86_desc {
     uint16_t size;
     uint32_t addr;
-} x86_desc_t;
+} __attribute__ ((packed));
 
 /* This is a segment descriptor.  It goes in the GDT. */
 typedef struct seg_desc {
@@ -112,7 +111,7 @@ typedef struct __attribute__((packed)) tss_t {
 } tss_t;
 
 /* Some external descriptors declared in .S files */
-extern x86_desc_t gdt_desc;
+extern struct x86_desc gdt_desc;
 
 extern uint16_t ldt_desc;
 extern uint32_t ldt_size;
@@ -162,7 +161,7 @@ typedef union idt_desc_t {
 /* The IDT itself (declared in x86_desc.S */
 extern idt_desc_t idt[NUM_VEC];
 /* The descriptor used to load the IDTR */
-extern x86_desc_t* idt_desc_ptr;
+extern struct x86_desc idt_desc;
 
 /* Sets runtime parameters for an IDT entry */
 #define SET_IDT_ENTRY(str, handler)                              \
@@ -193,7 +192,7 @@ do {                                    \
 do {                                    \
     asm volatile ("lidt (%0)"           \
             :                           \
-            : "g" (desc)                \
+            : "m" (desc)                \
             : "memory"                  \
     );                                  \
 } while (0)

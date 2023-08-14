@@ -5,4 +5,23 @@
 #define PIC_SLAVE_FIRST_INTR  (PIC_MASTER_FIRST_INTR + 8) // first intr vector in 8259 slave
 #define PIC_MAX_INTR  (PIC_SLAVE_FIRST_INTR + 8)
 
+#define PIC_TIMER_INTR    0x30
+#define PIC_KEYBOARD_INTR 0x31
+#define PIC_HARDISK_INTR  0x35
+#define PIC_SOFTDISK_INTR 0x36
+#define PIC_PRINTER_INTR  0x37
+#define PIC_RTC_INTR      0x38
+
+#define SYSCALL_INTR 0x80
+
+/*
+ * The only difference between trap and interrupt is that
+ * interrupt gate will disable interrupt auto and trap gate will not.
+ */
+#define TRAP_GATE 15
+#define INTR_GATE 14
+#define SYSTEM_GATE TRAP_GATE
+
+#define KERNEL_RPL 0
+#define USER_RPL   3
 #endif

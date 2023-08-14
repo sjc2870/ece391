@@ -1,0 +1,1 @@
+extern void init_8402_keyboard_mouse();

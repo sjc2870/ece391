@@ -49,7 +49,7 @@ _gdt:
     .quad 0x00CFF2000000FFFF # user ds
     .quad 0x00CFF2000000FFFF # kernel tss
     .quad 0x00CFF2000000FFFF # kernel ldt
-    .rept 250
+    .rept 248
     .quad 0
     .endr
 gdt_end:

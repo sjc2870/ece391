@@ -183,7 +183,7 @@ static inline void cpuid(uint32_t op, uint32_t regs[4])
  */
 static inline void io_delay(void)
 {
-    outb(0x80, 0);
+    outb(0, 0x80);
 }
 
 

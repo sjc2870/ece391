@@ -9,23 +9,13 @@
 #include "debug.h"
 #include "tests.h"
 #include "vga.h"
+#include "intr.h"
+#include "keyboard.h"
 
 #define RUN_TESTS
 
-
 extern int syscall_handler();
 extern int timer_handler();
-
-/*
- * The only difference between trap and interrupt is that
- * interrupt gate will disable interrupt auto and trap gate will not.
- */
-#define TRAP_GATE 15
-#define INTR_GATE 14
-#define SYSTEM_GATE TRAP_GATE
-
-#define KERNEL_RPL 0
-#define USER_RPL   3
 
 #define APIC_LOCAL_TIMER_ONESHOT_MODE  (0)
 #define APIC_LOCAL_TIMER_PERIODIC_MODE (1 << 17)
@@ -34,38 +24,6 @@ extern int timer_handler();
 #define APIC_LOCAL_TIMER_DELIVERT_PENDING (1 << 11)
 
 #define LOCAL_APIC_TIMER 0xbf
-
-static void _set_gate(idt_desc_t *gate, int type, int dpl, void *addr)
-{
-    memset(gate, 0, sizeof(*gate));
-    gate->dpl = dpl;
-    gate->present = 1;
-    gate->type = type;
-    gate->seg_selector = KERNEL_CS;
-    SET_IDT_ENTRY(*gate, addr);
-}
-
-static void set_trap_gate(unsigned int n, void *addr)
-{
-    _set_gate(&idt[n], TRAP_GATE, KERNEL_RPL, addr);
-}
-
-static void set_intr_gate(unsigned int n, void *addr)
-{
-    _set_gate(&idt[n], INTR_GATE, KERNEL_RPL, addr);
-}
-
-static void set_system_gate(unsigned int n, void *addr)
-{
-    _set_gate(&idt[n], SYSTEM_GATE, USER_RPL, addr);
-}
-
-void setup_idt()
-{
-    /* 0-31 is reserved, see "EXCEPTION AND INTERRUPT VECTORS" in intel manual volume2 */
-    lidt(idt_desc_ptr);
-    printf("done\n");
-}
 
 static bool detect_apic()
 {
@@ -99,6 +57,13 @@ static uint8_t get_apic_id()
         return (regs[3] >> 24);
 }
 
+static void self_test()
+{
+    asm volatile ("int $0x3");
+}
+
+extern void early_setup_idt();
+extern void setup_idt();
 void entry(unsigned long magic, unsigned long addr) {
 
     uint8_t apic_id = 0;
@@ -174,8 +139,12 @@ void entry(unsigned long magic, unsigned long addr) {
         return;
     /* Init the PIC */
     i8259_init();
-
-    setup_idt();
+    early_setup_idt();
+    clear();
+    // init_8402_keyboard_mouse();
+    sti();
+    self_test();
+    while (1) ;
 
     /* Initialize devices, memory, filesystem, enable device interrupts on the
      * PIC, any other initialization stuff... */
@@ -187,12 +156,12 @@ void entry(unsigned long magic, unsigned long addr) {
     /*printf("Enabling Interrupts\n");
     sti();*/
 
-#ifdef RUN_TESTS
-    /* Run tests */
+/* #ifdef RUN_TESTS
+    Run tests
     launch_tests();
-#endif
+#endif */
     /* Execute the first program ("shell") ... */
 
     /* Spin (nicely, so we don't chew up cycles) */
-    asm volatile (".1: hlt; jmp .1;");
+    // asm volatile (".1: hlt; jmp .1;");
 }

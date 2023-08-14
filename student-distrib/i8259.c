@@ -33,6 +33,9 @@ uint8_t slave_mask;  /* IRQs 8-15 */
 #define ICW4_BUF_MASTER	0x0C    /* Buffered mode/master */
 #define ICW4_SFNM	0x10		/* Special fully nested (not) */
 
+uint8_t master_mask = 0xff & ~(1 << 0x2); /* IRQs 0-7  */
+uint8_t slave_mask = 0xff;  /* IRQs 8-15 */
+
 /*
  * @reference:  https://wiki.osdev.org/8259_PIC
  *              http://jpk.pku.edu.cn/course/wjyl/script/chapter18.pdf
@@ -41,44 +44,29 @@ uint8_t slave_mask;  /* IRQs 8-15 */
 void i8259_init(void)
 {
     /* mask all interrupts in master and slave chips */
-    outb_d(0xff, PIC_MASTER);
-    outb_d(0xff, PIC_SLAVE);
+    outb_d(0xff, PIC_MASTER_DATA);
 
     /* ICW1, start initialization  */
-    outb_d(ICW1_INIT|ICW1_ICW4|ICW1_CASCADE|ICW1_EDGE, PIC_MASTER);
-    outb_d(ICW1_INIT|ICW1_ICW4|ICW1_CASCADE|ICW1_EDGE, PIC_SLAVE);
+    outb_d(ICW1_INIT|ICW1_ICW4|ICW1_CASCADE|ICW1_EDGE, PIC_MASTER_CMD);
+    outb_d(ICW1_INIT|ICW1_ICW4|ICW1_CASCADE|ICW1_EDGE, PIC_SLAVE_CMD);
 
     /*
      * ICW2: Because conflict of intr vector of 8259A and intr vector of cpu, we should
      * do remapping of intr vector of 8259A
      */
-    outb_d(PIC_MASTER_FIRST_INTR, PIC_MASTER_CMD);
-    outb_d(PIC_SLAVE_FIRST_INTR, PIC_SLAVE_CMD);
+    outb_d(PIC_MASTER_FIRST_INTR, PIC_MASTER_DATA);
+    outb_d(PIC_SLAVE_FIRST_INTR, PIC_SLAVE_DATA);
 
     /* ICW3: tell Master PIC that there is a slave PIC at IRQ2 (0000 0100) */
-    outb_d(ICW3_IRQ2, PIC_MASTER_CMD);
-    outb_d(ICW3_IRQ2, PIC_SLAVE_CMD);
+    outb_d(ICW3_IRQ2, PIC_MASTER_DATA);
+    outb_d(0x2, PIC_SLAVE_DATA);
 
     /* ICW4: 8086mode, normal EOI, non buffer, fully nested mode */
-    outb_d(ICW4_8086, PIC_MASTER_CMD);
-    outb_d(ICW4_8086, PIC_SLAVE_CMD);
-}
+    outb_d(ICW4_8086, PIC_MASTER_DATA);
+    outb_d(ICW4_8086, PIC_SLAVE_DATA);
 
-/* Enable (unmask) the specified IRQ */
-void enable_irq(uint32_t irq_num) {
-    uint16_t port;
-    uint8_t value;
-
-    if (irq_num & 8) {
-        // slave
-        port = PIC_SLAVE;
-        irq_num -= 8;
-    } else {
-        // master
-        port = PIC_MASTER;
-    }
-    value = inb(port) | (1 << irq_num);
-    outb(port, value);
+    outb_d(master_mask, PIC_MASTER_DATA);
+    outb_d(slave_mask, PIC_SLAVE_DATA);
 }
 
 /* Disable (mask) the specified IRQ */
@@ -94,8 +82,26 @@ void disable_irq(uint32_t irq_num) {
         // master
         port = PIC_MASTER;
     }
-    value = inb(port) & ~(1 << irq_num);
-    outb(port, value);
+    value = inb(port) | (1 << irq_num);
+    outb(value, port);
+}
+
+/* Enable (unmask) the specified IRQ */
+void enable_irq(uint32_t irq_num) {
+    uint16_t port;
+    uint32_t value;
+
+    if (irq_num & 8) {
+        // slave
+        port = PIC_SLAVE_DATA;
+        irq_num -= 8;
+    } else {
+        // master
+        port = PIC_MASTER_DATA;
+    }
+    value = inb(port);
+    value = value & ~(1 << irq_num);
+    outb(value, port);
 }
 
 /* Send end-of-interrupt signal for the specified IRQ */
