@@ -106,4 +106,9 @@ void enable_irq(uint32_t irq_num) {
 
 /* Send end-of-interrupt signal for the specified IRQ */
 void send_eoi(uint32_t irq_num) {
+    if (irq_num & 8) {
+        outb(0x20, PIC_SLAVE_CMD);
+    } else {
+        outb(0x20, PIC_MASTER_CMD);
+    }
 }

@@ -9,7 +9,7 @@
 #include "debug.h"
 #include "tests.h"
 #include "vga.h"
-#include "intr.h"
+#include "intr_def.h"
 #include "keyboard.h"
 
 #define RUN_TESTS
@@ -62,8 +62,6 @@ static void self_test()
     asm volatile ("int $0x3");
 }
 
-extern void early_setup_idt();
-extern void setup_idt();
 void entry(unsigned long magic, unsigned long addr) {
 
     uint8_t apic_id = 0;
@@ -140,8 +138,12 @@ void entry(unsigned long magic, unsigned long addr) {
     /* Init the PIC */
     i8259_init();
     early_setup_idt();
-    clear();
+    if (keyboard_init()) {
+        printf("keyboard init failed\n");
+        return;
+    }
     // init_8402_keyboard_mouse();
+    clear();
     sti();
     self_test();
     while (1) ;

@@ -1,91 +1,215 @@
 #include "lib.h"
 
-#define DATA_PORT 0x60
+#define DATA_PORT   0x60
 #define STATUS_PORT 0x64  /* for read */
 #define CMD_PORT    0x64  /* for write */
 
+/* reference:   https://wiki.osdev.org/%228042%22_PS/2_Controller
+                https://github.com/Stichting-MINIX-Research-Foundation/minix/blob/master/minix/drivers/hid/pckbd/pckbd.c#L254
+*/
 
-void keyboard_init()
+// function keys map, 0x80 to 0xFF, unassigned have 0xFF
+#define DO_GUI    0xFF
+#define DO_APPS   0xFF
+#define DO_F1     0x81
+#define DO_F2     0x82
+#define DO_F3     0x83
+#define DO_F4     0x84
+#define DO_F5     0x85
+#define DO_F6     0x86
+#define DO_F7     0x87
+#define DO_F8     0x88
+#define DO_F9     0x89
+#define DO_F10    0x8A
+#define DO_F11    0x8B
+#define DO_F12    0x8C
+#define DO_INSERT 0x92
+#define DO_DELETE 0x93
+#define DO_PGUP   0x95
+#define DO_PGDN   0x96
+#define DO_UARROW 0xAA
+#define DO_DARROW 0xAB
+#define DO_RARROW 0xAC
+#define DO_LARROW 0xAD
+#define DO_HOME   0xB0
+#define DO_END    0xB1
+#define DO_LSHFT  0xB2
+#define DO_RSHFT  0xB3
+
+static unsigned char scancode_map[256] = {
+    // left column is the pressed code, right column is the released code
+    [0x1E]='a',[0x9E]='A',
+    [0x30]='b',[0xB0]='B',
+    [0x2E]='c',[0xAE]='C',
+    [0x20]='d',[0xA0]='D',
+    [0x12]='e',[0x92]='E',
+    [0x21]='f',[0xA1]='F',
+    [0x22]='g',[0xA2]='G',
+    [0x23]='h',[0xA3]='H',
+    [0x17]='i',[0x97]='I',
+    [0x24]='j',[0xA4]='J',
+    [0x25]='k',[0xA5]='K',
+    [0x26]='l',[0xA6]='L',
+    [0x32]='m',[0xB2]='M',
+    [0x31]='n',[0xB1]='N',
+    [0x18]='o',[0x98]='O',
+    [0x19]='p',[0x99]='P',
+    [0x10]='q',[0x90]='Q',
+    [0x13]='r',[0x93]='R',
+    [0x1F]='s',[0x9F]='S',
+    [0x14]='t',[0x94]='T',
+    [0x16]='u',[0x96]='U',
+    [0x2F]='v',[0xAF]='V',
+    [0x11]='w',[0x91]='W',
+    [0x2D]='x',[0xAD]='X',
+    [0x15]='y',[0x95]='Y',
+    [0x2C]='z',[0xAC]='Z',
+    [0x0B]='0',[0x8B]=')',
+    [0x02]='1',[0x82]='!',
+    [0x03]='2',[0x83]='@',
+    [0x04]='3',[0x84]='#',
+    [0x05]='4',[0x85]='$',
+    [0x06]='5',[0x86]='%',
+    [0x07]='6',[0x87]='^',
+    [0x08]='7',[0x88]='&',
+    [0x09]='8',[0x89]='*',
+    [0x0A]='9',[0x8A]='(',
+    [0x29]='`',[0xA9]='~',
+    [0x0C]='-',[0x8C]='_',
+    [0x0D]='=',[0x8D]='+',
+    [0x2B]='\\',[0xAB]='|',
+    [0x39]=' ',[0xB9]=' ',
+    [0x0F]='\t',[0x8F]='\t',
+    [0x1C]='\n',[0x9C]='\n', // enter
+    [0x1A]='[',[0x9A]='{',
+    [0x1B]=']',[0x9B]='}',
+    [0x27]=';',[0xA7]=':',
+    [0x28]='\'',[0xA8]='"',
+    [0x33]=',',[0xB3]='<',
+    [0x34]='.',[0xB4]='>',
+    [0x35]='/',[0xB5]='?',
+    [0x0E]='\b',[0x8E]='\b', // function key
+    [0x2A]=DO_LSHFT,[0xAA]=DO_LSHFT,
+    [0x5B]=DO_GUI,[0xDB]=DO_GUI,
+    [0x5C]=DO_GUI,[0xDC]=DO_GUI,
+    [0x5D]=DO_APPS,[0xDD]=DO_APPS,
+    [0x01]='\33',[0x81]='\33',
+    [0x3B]=DO_F1,[0xBB]=DO_F1,
+    [0x3C]=DO_F2,[0xBC]=DO_F2,
+    [0x3D]=DO_F3,[0xBD]=DO_F3,
+    [0x3E]=DO_F4,[0xBE]=DO_F4,
+    [0x3F]=DO_F5,[0xBF]=DO_F5,
+    [0x40]=DO_F6,[0xC0]=DO_F6,
+    [0x41]=DO_F7,[0xC1]=DO_F7,
+    [0x42]=DO_F8,[0xC2]=DO_F8,
+    [0x43]=DO_F9,[0xC3]=DO_F9,
+    [0x44]=DO_F10,[0xC4]=DO_F10,
+    [0x57]=DO_F11,[0xD7]=DO_F11,
+    [0x58]=DO_F12,[0xD8]=DO_F12,
+    [0x52]=DO_INSERT,[0xD2]=DO_INSERT,
+    [0x47]=DO_HOME,[0x97]=DO_HOME,
+    [0x49]=DO_PGUP,[0xC9]=DO_PGUP,
+    [0x53]=DO_DELETE,[0xD3]=DO_DELETE,
+    [0x4F]=DO_END,[0xCF]=DO_END,
+    [0x51]=DO_PGDN,[0xD1]=DO_PGDN,
+    [0x48]=DO_UARROW,[0xC8]=DO_UARROW,
+    [0x4B]=DO_LARROW,[0xCB]=DO_LARROW,
+    [0x50]=DO_DARROW,[0xD0]=DO_DARROW,
+    [0x4D]=DO_RARROW,[0xCD]=DO_RARROW
+};
+
+int keyboard_init()
 {
+    int v = 0;
+
+    while ((v = inb(CMD_PORT) & 0x1))
+        v = inb(DATA_PORT);
+
+    outb(0xae, CMD_PORT);
+    outb(0x20, CMD_PORT);
+    v = (inb(DATA_PORT) | 1) & ~0x10;
+    outb(0x60, CMD_PORT);
+    outb(v, DATA_PORT);
+
+    outb(0xf4, DATA_PORT);
+
+    return 0;
+
+    /* Disable devices */
     outb(0xad, CMD_PORT);
     outb(0xa7, CMD_PORT);
+
+    /* Flush The Output Buffer */
     inb(DATA_PORT);
+
+    /* Set the Controller Configuration Byte */
+    outb(0x20, CMD_PORT);
+    v = inb(DATA_PORT);
+    if (!(v & (1 << 5))) {
+        printf("PS/2 port disabled\n");
+    }
+    v |= 3;
+    v &= ~0x10;
+    // v &= ~(1 << 6);
+    outb(0x60, CMD_PORT);
+    outb(v, CMD_PORT);
+
+    /* Perform controller self test */
+    outb(0xaa, CMD_PORT);
+    v = inb(DATA_PORT);
+    if (v != 0x55) {
+        printf("PS/2 controller self test failed\n");
+    }
+
+    /* Determine if there are 2 channels */
+    outb(0xa8, CMD_PORT);
+    v = inb(STATUS_PORT);
+    if (v & (1 << 5)) {
+        printf("not a dual channel controller\n");
+        return -1;
+    }
+    outb(0xa7, CMD_PORT);
+
+    /* Perform interface tests */
+    outb(0xAB, CMD_PORT);
+    v = inb(DATA_PORT);
+    if (v) {
+        printf("The test of first PS/2 port failed\n");
+        return -1;
+    }
+    outb(0xA9, CMD_PORT);
+    v = inb(DATA_PORT);
+    if (v) {
+        printf("The test of second PS/2 port failed\n");
+        return -1;
+    }
+
+    /* Enable devices */
+    outb(0xa8, CMD_PORT);
+    outb(0xae, CMD_PORT);
+    outb(0xf4, DATA_PORT);
+
+    return 0;
 }
 
-#define PS2_DATA_PORT 0x60
-#define PS2_CTRL_PORT 0x64
+void intr0x31_handler()
+{
+    u8 v = inb(0x60);
+    static bool shift_pressed = false;
 
-// read status register
-#define PS2_STATUS_REG  inb(PS2_CTRL_PORT)
-// send data to port 0x60
-#define PS2_DATA_OUT(data) do { \
-    while (PS2_STATUS_REG & 2)  \
-        asm volatile ("pause"); \
-    outb(data, PS2_DATA_PORT);  \
-} while(0)
-// read data from 0x60
-#define PS2_DATA_IN(ret) do {     \
-    while (!(PS2_STATUS_REG & 1)) \
-        asm volatile ("pause");   \
-    *ret = inb(PS2_DATA_PORT);    \
-} while (0)
-// send command to port 0x64 (PS/2 controller)
-#define PS2_SEND_CMD(data) do { \
-    while (PS2_STATUS_REG & 2)  \
-        asm volatile ("pause"); \
-    outb(data, PS2_CTRL_PORT);  \
-} while(0)
+    if (scancode_map[v] == DO_LSHFT || scancode_map[v] == DO_RSHFT) {
+        shift_pressed = !shift_pressed;
+        return;
+    }
 
-// "8042" PS/2 Controller initializatin
-//
-// Configuration Byte
-// 0	First PS/2 port interrupt (1 = enabled, 0 = disabled)
-// 1	Second PS/2 port interrupt (1 = enabled, 0 = disabled, only if 2 PS/2 ports supported)
-// 2	System Flag (1 = system passed POST, 0 = your OS shouldn't be running)
-// 3	Should be zero
-// 4	First PS/2 port clock (1 = disabled, 0 = enabled)
-// 5	Second PS/2 port clock (1 = disabled, 0 = enabled, only if 2 PS/2 ports supported)
-// 6	First PS/2 port translation (1 = enabled, 0 = disabled)
-// 7	Must be zero
-void init_8402_keyboard_mouse() {
-    unsigned char ret;
-    // 8402 init
-    PS2_SEND_CMD(0xAD); // disable keyboard
-    PS2_SEND_CMD(0xA7); // disable mouse
-    inb(PS2_DATA_PORT); // clear buffer
-    PS2_SEND_CMD(0x20); // read Configuration Byte
-    PS2_DATA_IN(&ret);  // read Configuration Byte
+    if (v == 0x45) { return; /* ignore */ }      /* number lock pressed */
+    else if (v == 0x3A) { return; /* ignore */ } /* caps lock pressed */
+    else if (v == 0x46) { return; /* ignore */ } /* scroll lock pressed */
 
-    ret |= 3;           // enable port interrupt 1&2
-    ret &= 0x0F;        // close First PS/2 port translation
-    PS2_SEND_CMD(0x60);
-    PS2_DATA_OUT(ret);
-    PS2_SEND_CMD(0x20); // read Configuration Byte
-    PS2_DATA_IN(&ret);  // read Configuration Byte
-
-    PS2_SEND_CMD(0xAE); // enable keyboard
-    PS2_SEND_CMD(0xA8); // enable mouse
-    PS2_DATA_OUT(0xF5); // disable keyboard scanning
-    PS2_SEND_CMD(0xD4); // select port 2
-    PS2_DATA_OUT(0xF5); // disable mouse report
-
-    // keyboard init
-    PS2_DATA_OUT(0xF0);
-    PS2_DATA_OUT(1);    // scan code set 1
-    PS2_DATA_OUT(0xED);
-    PS2_DATA_OUT(0);    // clear LED
-
-    // mouse init
-    PS2_SEND_CMD(0xD4); // select port 2
-    PS2_DATA_OUT(0xFF); // reset mouse
-
-    PS2_SEND_CMD(0xD4);
-    PS2_DATA_OUT(0xF3);
-    PS2_SEND_CMD(0xD4);
-    PS2_DATA_OUT(100);  // sample rate
-
-    // enable keyboard, mouse
-    PS2_DATA_OUT(0xF4);
-    PS2_SEND_CMD(0xD4); // select port 2
-    PS2_DATA_OUT(0xF4); // enable mouse report
+    if (v < 0x80) {
+        if (shift_pressed)
+            printf("%c", scancode_map[v+0x80]);
+        else
+            printf("%c", scancode_map[v]);
+    }
 }

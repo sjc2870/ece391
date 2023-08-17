@@ -26,6 +26,9 @@
 
 /* This structure is used to load descriptor base registers
  * like the GDTR and IDTR */
+ /* must add __attribute__ ((packed)), otherwise there will be 2 bytes of padding after size and before addr,
+ * accroding to https://stackoverflow.com/a/37635449/19784965
+*/
 struct x86_desc {
     uint16_t size;
     uint32_t addr;

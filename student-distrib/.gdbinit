@@ -5,5 +5,4 @@ b entry
 b i8259_init
 b enable_irq
 b self_test
-b intr0x30_handler
 b intr0x31_handler
