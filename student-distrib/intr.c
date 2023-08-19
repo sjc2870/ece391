@@ -1,4 +1,3 @@
-#include "intr.h"
 #include "intr_def.h"
 #include "types.h"
 #include "x86_desc.h"
@@ -188,12 +187,6 @@ static void intr0x38_handler()
     printf("real time counter occured\n");
 }
 
-/* APIC_SLAVE_FIRST_INTR +4 */
-static void intr0x3C_handler()
-{
-    printf("mouse interrupt occured\n");
-}
-
 /* APIC_SLAVE_FIRST_INTR +5 */
 static void intr0x3D_handler()
 {
@@ -234,6 +227,7 @@ void setup_intr_handler()
     SET_STATIC_INTR_HANDLER(0x15);
     SET_STATIC_INTR_HANDLER(0x30);
     SET_EXTERN_INTR_HANDLER(0x31);
+    SET_EXTERN_INTR_HANDLER(0x3C);
     SET_STATIC_INTR_HANDLER(0x80);
 }
 
@@ -251,12 +245,14 @@ void early_setup_idt()
 
     set_intr_gate(PIC_TIMER_INTR, intr0x30_entry);
     set_intr_gate(PIC_KEYBOARD_INTR, intr0x31_entry);
+    set_intr_gate(PIC_MOUSE_INTR, intr0x3C_entry);
     asm volatile ("lidt %0" ::"m"(idt_desc));
 
     setup_intr_handler();
 
     enable_irq(PIC_KEYBOARD_INTR - PIC_MASTER_FIRST_INTR);
     enable_irq(PIC_TIMER_INTR - PIC_MASTER_FIRST_INTR);
+    // enable_irq(PIC_MOUSE_INTR - PIC_MASTER_FIRST_INTR);
 }
 
 unsigned long generic_intr_handler(unsigned long intr_num, unsigned long esp)

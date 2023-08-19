@@ -3,6 +3,4 @@ b start
 layout split
 b entry
 b i8259_init
-b enable_irq
-b self_test
-b intr0x31_handler
+b intr0x3C_handler

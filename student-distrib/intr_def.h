@@ -2,6 +2,8 @@
 #define _INTR_DEF_H
 #include "types.h"
 #include "intr.h"
+#include "keyboard.h"
+#include "mouse.h"
 
 
 typedef void (*intr_handler_t)();
@@ -23,6 +25,7 @@ extern void early_setup_idt();
 extern void ignore_intr();
 extern void intr0x30_entry();
 extern void intr0x31_entry();
+extern void intr0x3C_entry();
 
 
 #endif

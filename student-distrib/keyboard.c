@@ -1,4 +1,5 @@
 #include "lib.h"
+#include "vga.h"
 
 #define DATA_PORT   0x60
 #define STATUS_PORT 0x64  /* for read */
@@ -195,8 +196,10 @@ int keyboard_init()
 void intr0x31_handler()
 {
     u8 v = inb(0x60);
+    u16 x, y;
     static bool shift_pressed = false;
 
+    get_cursor(&x, &y);
     if (scancode_map[v] == DO_LSHFT || scancode_map[v] == DO_RSHFT) {
         shift_pressed = !shift_pressed;
         return;
@@ -206,6 +209,13 @@ void intr0x31_handler()
     else if (v == 0x3A) { return; /* ignore */ } /* caps lock pressed */
     else if (v == 0x46) { return; /* ignore */ } /* scroll lock pressed */
 
+    /* Handle cursor */
+    if (scancode_map[v] == DO_UARROW)      { set_cursor(x, y-1); return; }
+    else if (scancode_map[v] == DO_DARROW) { set_cursor(x, y+1); return; }
+    else if (scancode_map[v] == DO_LARROW) { set_cursor(x-1, y); return; }
+    else if (scancode_map[v] == DO_RARROW) { set_cursor(x+1, y); return; }
+
+    /* Just ignore released code */
     if (v < 0x80) {
         if (shift_pressed)
             printf("%c", scancode_map[v+0x80]);

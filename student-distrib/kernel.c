@@ -2,6 +2,7 @@
  * vim:ts=4 noexpandtab
  */
 
+#include "mouse.h"
 #include "multiboot.h"
 #include "x86_desc.h"
 #include "lib.h"

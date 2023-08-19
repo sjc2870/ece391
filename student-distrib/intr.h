@@ -11,6 +11,7 @@
 #define PIC_SOFTDISK_INTR 0x36
 #define PIC_PRINTER_INTR  0x37
 #define PIC_RTC_INTR      0x38
+#define PIC_MOUSE_INTR    0x3C
 
 #define SYSCALL_INTR 0x80
 
