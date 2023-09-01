@@ -102,6 +102,11 @@ void set_console(uint32_t addr)
     out_idx((addr - 0xB8000), crtc, STATR_ADDRESS_IDX_L);      // low
 }
 
+void reset_console()
+{
+    set_console(0xB8000);
+}
+
 void console_init()
 {
     /* Clear the screen. */

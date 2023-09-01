@@ -3,7 +3,6 @@
  */
 
 #include "mouse.h"
-#include "multiboot.h"
 #include "x86_desc.h"
 #include "lib.h"
 #include "i8259.h"
@@ -12,6 +11,7 @@
 #include "vga.h"
 #include "intr_def.h"
 #include "keyboard.h"
+#include "paging.h"
 
 #define RUN_TESTS
 
@@ -143,10 +143,14 @@ void entry(unsigned long magic, unsigned long addr) {
         printf("keyboard init failed\n");
         return;
     }
-    // init_8402_keyboard_mouse();
     clear();
     sti();
+    if (paging_init(addr)) {
+        printf("paging init failed\n");
+    }
     self_test();
+
+    /* Enable paging */
     while (1) ;
 
     /* Initialize devices, memory, filesystem, enable device interrupts on the

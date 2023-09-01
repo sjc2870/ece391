@@ -2,6 +2,7 @@
  * vim:ts=4 noexpandtab */
 
 #include "lib.h"
+#include "vga.h"
 
 #define VIDEO       0xB8000
 #define NUM_COLS    80
@@ -22,6 +23,8 @@ void clear(void) {
         *(uint8_t *)(video_mem + (i << 1)) = ' ';
         *(uint8_t *)(video_mem + (i << 1) + 1) = ATTRIB;
     }
+    reset_console();
+    screen_x = screen_y = 0;
 }
 
 /* Standard printf().

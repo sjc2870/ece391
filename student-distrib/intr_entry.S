@@ -3,7 +3,7 @@
 
 .section .text
 
-.global ignore_intr
+.global ignore_intr,intr_num
 .global generic_intr_handler
 
 # reference chapter 6.12.1 (Exception- or Interrupt-Handler Procedures) volume 3 intel manual
