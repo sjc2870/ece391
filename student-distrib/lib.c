@@ -184,6 +184,8 @@ void putc(uint8_t c) {
         screen_x++;
         screen_x %= NUM_COLS;
         screen_y = (screen_y + (screen_x / NUM_COLS)) % NUM_ROWS;
+        if (screen_x == 0)
+            screen_y = (screen_y+1)%NUM_ROWS;
     }
 }
 
