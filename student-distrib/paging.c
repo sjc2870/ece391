@@ -5,6 +5,12 @@ int test = 0;
 
 extern void _start();
 extern int intr_num;
+extern int __text_start;
+extern int __text_end;
+extern int __data_start;
+extern int __data_end;
+extern int __bss_start;
+extern int __bss_end;
 int paging_init(unsigned long addr)
 {
     multiboot_info_t *mbi = (multiboot_info_t*)addr;
@@ -25,6 +31,9 @@ int paging_init(unsigned long addr)
                     (unsigned)mmap->length_low);
         }
     }
-    printf("%x %x %x %x\n", &addr, &test, _start, intr_num);
+    printf("stack var:%x global var: %x text var:%x data var:%x\n"
+          "text start:%x text end:%x data start:%x data end:%x bss start:%x bss end:%x\n",
+           &addr, &test, _start, &intr_num, &__text_start, &__text_end, &__data_start, &__data_end, &__bss_start, &__bss_end);
+           // &addr, &test, _start, &intr_num);
     return 0;
 }
