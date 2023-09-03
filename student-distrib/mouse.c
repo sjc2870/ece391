@@ -45,5 +45,5 @@ void intr0x3C_handler()
 
     set_cursor(x, y);
 
-    printf("mouse interrupt occured\n");
+    KERN_INFO("mouse interrupt occured\n");
 }

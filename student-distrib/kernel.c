@@ -33,10 +33,10 @@ static bool detect_apic()
         cpuid(1, regs);
 
         if (CHECK_FLAG(regs[3], 9)) {
-            printf("APIC present\n");
+            KERN_INFO("APIC present\n");
             return true;
         } else {
-            printf("WARNING APIC absent\n");
+            KERN_INFO("WARNING APIC absent\n");
             return false;
         }
 }
@@ -48,10 +48,10 @@ static uint8_t get_apic_id()
         cpuid(1, regs);
 
         if (CHECK_FLAG(regs[3], 9)) {
-            printf("APIC present\n");
+            KERN_INFO("APIC present\n");
             return true;
         } else {
-            printf("WARNING APIC absent\n");
+            KERN_INFO("WARNING APIC absent\n");
             return false;
         }
 
@@ -87,10 +87,10 @@ void entry(unsigned long magic, unsigned long addr) {
 
         cpuid(1, regs);
         unsigned logical = (regs[1] >> 16) & 0xff;
-        printf("there are %u logical cores\n", logical);
+        KERN_INFO("there are %u logical cores\n", logical);
         cpuid(4, regs);
         uint32_t cores = ((regs[0] >> 26) & 0x3f) + 1;
-        printf("there are %u physical cores\n", cores);
+        KERN_INFO("there are %u physical cores\n", cores);
     }
 
     /* Construct an LDT entry in the GDT */
@@ -140,13 +140,13 @@ void entry(unsigned long magic, unsigned long addr) {
     i8259_init();
     early_setup_idt();
     if (keyboard_init()) {
-        printf("keyboard init failed\n");
+        KERN_INFO("keyboard init failed\n");
         return;
     }
     clear();
     sti();
     if (paging_init(addr)) {
-        printf("paging init failed\n");
+        KERN_INFO("paging init failed\n");
     }
     self_test();
 
@@ -160,7 +160,7 @@ void entry(unsigned long magic, unsigned long addr) {
     /* Do not enable the following until after you have set up your
      * IDT correctly otherwise QEMU will triple fault and simple close
      * without showing you any output */
-    /*printf("Enabling Interrupts\n");
+    /*KERN_INFO("Enabling Interrupts\n");
     sti();*/
 
 /* #ifdef RUN_TESTS

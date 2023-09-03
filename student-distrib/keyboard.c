@@ -147,7 +147,7 @@ int keyboard_init()
     outb(0x20, CMD_PORT);
     v = inb(DATA_PORT);
     if (!(v & (1 << 5))) {
-        printf("PS/2 port disabled\n");
+        KERN_INFO("PS/2 port disabled\n");
     }
     v |= 3;
     v &= ~0x10;
@@ -159,14 +159,14 @@ int keyboard_init()
     outb(0xaa, CMD_PORT);
     v = inb(DATA_PORT);
     if (v != 0x55) {
-        printf("PS/2 controller self test failed\n");
+        KERN_INFO("PS/2 controller self test failed\n");
     }
 
     /* Determine if there are 2 channels */
     outb(0xa8, CMD_PORT);
     v = inb(STATUS_PORT);
     if (v & (1 << 5)) {
-        printf("not a dual channel controller\n");
+        KERN_INFO("not a dual channel controller\n");
         return -1;
     }
     outb(0xa7, CMD_PORT);
@@ -175,13 +175,13 @@ int keyboard_init()
     outb(0xAB, CMD_PORT);
     v = inb(DATA_PORT);
     if (v) {
-        printf("The test of first PS/2 port failed\n");
+        KERN_INFO("The test of first PS/2 port failed\n");
         return -1;
     }
     outb(0xA9, CMD_PORT);
     v = inb(DATA_PORT);
     if (v) {
-        printf("The test of second PS/2 port failed\n");
+        KERN_INFO("The test of second PS/2 port failed\n");
         return -1;
     }
 
@@ -197,11 +197,11 @@ void intr0x31_handler()
 {
     u8 v = inb(0x60);
     u16 x, y;
-    static bool shift_pressed = false;
+    static bool with_shift = false;
 
     get_cursor(&x, &y);
     if (scancode_map[v] == DO_LSHFT || scancode_map[v] == DO_RSHFT) {
-        shift_pressed = !shift_pressed;
+        with_shift = !with_shift;
         return;
     }
 
@@ -217,7 +217,7 @@ void intr0x31_handler()
 
     /* Just ignore released code */
     if (v < 0x80) {
-        if (shift_pressed)
+        if (with_shift)
             printf("%c", scancode_map[v+0x80]);
         else
             printf("%c", scancode_map[v]);

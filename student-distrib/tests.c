@@ -7,9 +7,9 @@
 
 /* format these macros as you see fit */
 #define TEST_HEADER 	\
-	printf("[TEST %s] Running %s at %s:%d\n", __FUNCTION__, __FUNCTION__, __FILE__, __LINE__)
+	KERN_INFO("[TEST %s] Running %s at %s:%d\n", __FUNCTION__, __FUNCTION__, __FILE__, __LINE__)
 #define TEST_OUTPUT(name, result)	\
-	printf("[TEST %s] Result = %s\n", name, (result) ? "PASS" : "FAIL");
+	KERN_INFO("[TEST %s] Result = %s\n", name, (result) ? "PASS" : "FAIL");
 
 static inline void assertion_failure(){
 	/* Use exception #15 for assertions, otherwise
@@ -21,7 +21,7 @@ static inline void assertion_failure(){
 /* Checkpoint 1 tests */
 
 /* IDT Test - Example
- * 
+ *
  * Asserts that first 10 IDT entries are not NULL
  * Inputs: None
  * Outputs: PASS/FAIL
@@ -35,7 +35,7 @@ int idt_test(){
 	int i;
 	int result = PASS;
 	for (i = 0; i < 10; ++i){
-		if ((idt[i].offset_15_00 == NULL) && 
+		if ((idt[i].offset_15_00 == NULL) &&
 			(idt[i].offset_31_16 == NULL)){
 			assertion_failure();
 			result = FAIL;

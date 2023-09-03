@@ -5,7 +5,7 @@ OUTPUT_ARCH(i386)
 SECTIONS
 {
     . = 0x500000;
-    __all_start = .;
+    __kernel_start = .;
 
     .text :
     {
@@ -32,7 +32,7 @@ SECTIONS
     }
 
     . = ALIGN(16);
-    __all_end = .;
+    __kernel_end = .;
 
     /DISCARD/ : { *(.note*) }
 }

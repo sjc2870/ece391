@@ -12,14 +12,14 @@
 #define ASSERT(EXP)                                                         \
 do {                                                                        \
     if (!(EXP)) {                                                           \
-        printf(__FILE__ ":%u: Assertion `" #EXP "\' failed.\n", __LINE__);  \
+        KERN_INFO(__FILE__ ":%u: Assertion `" #EXP "\' failed.\n", __LINE__);  \
     }                                                                       \
 } while(0)
 
 #define debugf(...)                     \
 do {                                    \
-    printf(__FILE__ ":%u: ", __LINE__); \
-    printf(__VA_ARGS__);                \
+    KERN_INFO(__FILE__ ":%u: ", __LINE__); \
+    KERN_INFO(__VA_ARGS__);                \
 } while(0)
 
 #else
