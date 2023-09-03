@@ -11,7 +11,7 @@
 #include "vga.h"
 #include "intr_def.h"
 #include "keyboard.h"
-#include "paging.h"
+#include "mm.h"
 
 #define RUN_TESTS
 
@@ -145,9 +145,10 @@ void entry(unsigned long magic, unsigned long addr) {
     }
     clear();
     sti();
-    if (paging_init(addr)) {
+    if (init_paging(addr)) {
         KERN_INFO("paging init failed\n");
     }
+    enable_paging();
     self_test();
 
     /* Enable paging */

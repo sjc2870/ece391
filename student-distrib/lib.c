@@ -2,6 +2,7 @@
  * vim:ts=4 noexpandtab */
 
 #include "lib.h"
+#include "errno.h"
 #include "vga.h"
 
 #define VIDEO       0xB8000
@@ -537,4 +538,39 @@ void panic(uint8_t *format, ...)
 {
     // KERN_INFO(format, args);
     /* todo: reboot */
+}
+
+/* @usage: set the nth to mth bits of num to 1 */
+int set_bit(int num, int n, int m)
+{
+    int mask = 0, result = 0;
+
+    if (n > m) {
+        KERN_INFO("error argument, n is %d, m is %d", n, m);
+        return -EINVAL;
+    }
+    // 创建一个掩码，其中第n到第m位为1，其余位为0
+    mask = ((1 << (m - n + 1)) - 1) << n;
+
+    // 使用按位或运算符将掩码与数字进行按位或操作
+    result = num | mask;
+
+    return result;
+}
+
+/* @usage: set the nth to mth bits of num to 0 */
+int clear_bit(int num, int n, int m) {
+    int mask = 0, result = 0;
+
+    if (n > m) {
+        KERN_INFO("error argument, n is %d, m is %d", n, m);
+        return -EINVAL;
+    }
+    // 创建一个掩码，其中第n到第m位为0，其余位为1
+    mask = ~(((1 << (m - n + 1)) - 1) << n);
+
+    // 使用按位与运算符将掩码与数字进行按位与操作
+    result = num & mask;
+
+    return result;
 }
