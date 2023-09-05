@@ -2,6 +2,8 @@
 #include "lib.h"
 #include "errno.h"
 #include "multiboot.h"
+#include "types.h"
+#include "vga.h"
 
 extern int __text_start;
 extern int __text_end;
@@ -39,29 +41,36 @@ extern int __kernel_end;
 uint32_t mem_bitmap[SLOTS];
 uint64_t phy_mem_base;
 uint64_t phy_mem_len;
+pgd_t *init_pgtbl_dir;
+
+/* @NOTE: caller must hold mm lock */
+#define ITERATE_PAGES(free_statements, used_statements)     \
+    int ___i, ___j;                                         \
+    int ___nr_slots = ((phy_mem_len / PAGE_SIZE) + 32)/32;  \
+    for (___i = 0; ___i < ___nr_slots; ++___i) {    \
+        /* every bit in uint32 */                   \
+        for (___j = 0; ___j < 32; ++___j) {         \
+            /*                                                                  \
+             * See if bit (32-j-1) was set. Cause we set bit from up to down.   \
+             * For example: j=0 represents bit 31, j=1 represents bit 30 ... j=31 represents bit 0  \
+             */                                                                                     \
+            if (!(mem_bitmap[___i] & (1 << (32-___j-1)))) {                                         \
+                free_statements;                                                                    \
+            } else {                                                                                \
+                used_statements;                                                                    \
+            }                                                                                       \
+        }                                                                                           \
+    }                                                                                               \
+
 
 /* only alloc 4k size memory, used for alloc page table */
 void* alloc_pgdir()
 {
-    /* called in init stage, so doesn't need lock */
-    int i, j;
-    int nr_slots = ((phy_mem_len / PAGE_SIZE) + 32)/32;
-    for (i = 0; i < nr_slots; ++i) {
-        /* every bit in uint32 */
-        for (j = 0; j < 32; ++j) {
-            /* every uint32 represents 32 bit, which means 32 pages */
-            uint32_t cur_addr = PAGE_SIZE * (i*32 + j) + phy_mem_base;
-            /*
-             * See if bit (32-j-1) was set. Cause we set bit from up to down.
-             * For example: j=0 represents bit 31, j=1 represents bit 30 ... j=31 represents bit 0
-             */
-            if (!(mem_bitmap[i] & (1 << (32-j-1)))) {
-                mem_bitmap[i] |= (1 << (32-j-1));
-                return (void*)cur_addr;
-            }
-        }
-    }
-
+    ITERATE_PAGES({
+        uint32_t cur_addr = PAGE_SIZE *(___i*32+___j)+phy_mem_base;
+        mem_bitmap[___i] |= (1 << (32-___j-1));
+        return (void*)cur_addr;
+        }, {});
 }
 
 int page_bitmap_init(unsigned long addr)
@@ -126,7 +135,7 @@ int page_bitmap_init(unsigned long addr)
                 continue;
             }
             /* mark kernel stack as used */
-            if (cur_addr >= STACK_BOTTOM && cur_addr < STACK_TOP) {
+            if (cur_addr >= STACK_TOP && cur_addr < STACK_BOTTOM) {
                 // printf("cur addr %x is in stack region, continue\n", cur_addr);
                 continue;
             }
@@ -134,29 +143,92 @@ int page_bitmap_init(unsigned long addr)
             mem_bitmap[i] &= ~(1 << (32-j-1));
         }
     }
-    /* every uint32 in mem_bitmap array */
-    for (i = 0; i < nr_slots; ++i) {
-        /* every bit in uint32 */
-        for (j = 0; j < 32; ++j) {
-            /* every uint32 represents 32 bit, which means 32 pages */
-            unsigned long cur_addr = PAGE_SIZE * (i*32 + j) + phy_mem_base;
-            /*
-             * See if bit (32-j-1) was set. Cause we set bit from up to down.
-             * For example: j=0 represents bit 31, j=1 represents bit 30 ... j=31 represents bit 0
-             */
-            if (mem_bitmap[i] & (1 << (32-j-1))) {
-                printf("address %x is used\n", cur_addr);
-            }
-        }
-    }
+    ITERATE_PAGES({}, {
+        unsigned long cur_addr = PAGE_SIZE * (___i*32 + ___j) + phy_mem_base;
+        printf("address %x is used\n", cur_addr);
+    });
 
     return 0;
 }
 
+/* @NOTE: caller must hold mm lock */
+int add_page_mapping(uint32_t linear_addr, uint32_t phy_addr)
+{
+    uint32_t pgd_offset = 0;
+    uint32_t pde_offset = 0;
+    uint32_t pte_offset = 0;
+    pde_t pde;  // pde represents 4M size memory
+    pte_t pte;  // pte represents 4K size memory
+
+
+    pgd_offset = get_bits(linear_addr, 22, 31);
+    pde_offset = get_bits(linear_addr, 12, 21);
+    pte_offset = get_bits(linear_addr, 0, 11);
+
+    pde = (uint32_t)init_pgtbl_dir[pgd_offset];
+    if (!pde) {
+        pde = (uint32_t)alloc_pgdir();
+        pde |= (1 << PRESENT_BIT);
+        pde |= (1 << RW_BIT);
+        init_pgtbl_dir[pgd_offset] = (uint32_t)pde;
+    }
+
+    pde &= ~(PAGE_MASK);
+    pte = ((uint32_t*)pde)[pde_offset];
+    if (!pte) {
+        pte = (uint32_t)(phy_addr & ~(PAGE_MASK));
+        pte |= (1 << PRESENT_BIT);
+        pte |= (1 << RW_BIT);
+        ((uint32_t*)pde)[pde_offset] = pte;
+    }
+    return 0;
+}
+
+static void paging_test()
+{
+    uint32_t linear_addr = 0x5038fb;
+    // uint32_t linear_addr = 0x503841;
+    uint32_t pgd_offset = 0;
+    uint32_t pde_offset = 0;
+    uint32_t pte_offset = 0;
+    pde_t pde;
+    pte_t pte;
+    uint32_t phy_addr = 0;
+
+    pgd_offset = get_bits(linear_addr, 22, 31);
+    pde_offset = get_bits(linear_addr, 12, 21);
+    pte_offset = get_bits(linear_addr, 0, 11);
+
+    pde = (uint32_t)*(init_pgtbl_dir + pgd_offset);
+    pde &= ~(PAGE_MASK);
+    pte = *(uint32_t*)(pde + pde_offset*4);
+    pte &= ~(PAGE_MASK);
+    // pte = ((uint32_t*)pde)[pde_offset];
+    phy_addr = pte & ~(PAGE_MASK);
+    phy_addr |= pte_offset;
+}
+
 int page_table_init()
 {
-    uint32_t *pgtbl_dir = alloc_pgdir();
-    pgtbl_dir[0] = 1;
+    /* A pgd_t pointer points to a page, which contains 1024 pde_t */
+    init_pgtbl_dir = alloc_pgdir();
+    memset(init_pgtbl_dir, 0, PAGE_SIZE);
+    /*
+     * We must ensure that
+     * linear address 0x&__kenel_start map to phy addr 0x&_kernel_start
+     *                0x(&__kernel_start + 4k) to phy addr 0x(&__kernel_start + 4k)
+     *                ...
+     *                0x(&__kernel_end) to phy addr 0x(&__kernel_end)
+     */
+
+     ITERATE_PAGES({}, {
+        unsigned long cur_addr = PAGE_SIZE * (___i*32 + ___j) + phy_mem_base;
+        if (cur_addr >= (unsigned long)&__kernel_start )
+            add_page_mapping(cur_addr, cur_addr);
+     });
+     add_page_mapping(VIDEO_MEM , VIDEO_MEM);
+
+     paging_test();
 
     return 0;
 }
@@ -192,8 +264,29 @@ void kfree()
 
 void enable_paging()
 {
+    uint32_t regs[4] = {0};// rax rbx rcx rdx
+
     /*
     * As we said in the comments(NOTE2) at the beginning of this file, we use 32-bit paging mode
-    * About the details of how to enable paging, see chapher 4.1.2(Paging-mode Enabling) intel manual volume 3.
+    * About the details of how to enable paging, see chapter 4.1.2(Paging-mode Enabling) intel manual volume 3.
     */
+    /* load init_pgtbl_dir to CR3 register */
+    asm volatile (  "movl %0, %%cr3;"
+                    "movl %%cr0, %%eax;"
+                    "orl $0x80000000, %%eax;"
+                    "movl %%eax, %%cr0;"
+                    :  /* no output */
+                    :"r"(init_pgtbl_dir)  /* input pgtable dir */
+                    : "eax");
+
+    /* set CR0.PG = 1 and CR4.PAE(disable PAE) = 0, CR4.PSE = 0(disable reserved bits) */
+
+    /* After enable paging, do some sanity check. Chapter 4.1.4 */
+    cpuid(1, regs);
+
+    /* test stack memory paging */
+    int a = 10;
+    a += 100;
+    /* test video memory paging */
+    printf("a is %d\n", a);
 }

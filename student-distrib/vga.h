@@ -13,4 +13,9 @@ void get_cursor(u16 *x, u16 *y);
 void console_init();
 void reset_console();
 
+#define VIDEO_MEM       0xB8000
+#define NUM_COLS    80
+#define NUM_ROWS    25
+#define ATTRIB      0x7
+
 #endif

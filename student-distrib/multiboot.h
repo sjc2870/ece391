@@ -12,7 +12,7 @@
 
 /* stack size is 4k */
 #define STACK_BOTTOM 0x800000
-#define STACK_TOP    0x801000
+#define STACK_TOP    0x7ff000
 
 #ifndef ASM
 

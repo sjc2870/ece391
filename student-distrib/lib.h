@@ -20,6 +20,11 @@ int8_t *strrev(int8_t* s);
 uint32_t strlen(const int8_t* s);
 void clear(void);
 
+
+int set_bits(int num, int n, int m);
+int clear_bits(int num, int n, int m);
+uint32_t get_bits(uint32_t num, int n, int m);
+
 #define KERN_INFO(format, args...)                      \
 do {                                                    \
     printf("func: %s file: %s line: %d " format,        \

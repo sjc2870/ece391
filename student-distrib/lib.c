@@ -5,14 +5,9 @@
 #include "errno.h"
 #include "vga.h"
 
-#define VIDEO       0xB8000
-#define NUM_COLS    80
-#define NUM_ROWS    25
-#define ATTRIB      0x7
-
 static int screen_x;
 static int screen_y;
-static char* video_mem = (char *)VIDEO;
+static char* video_mem = (char *)VIDEO_MEM;
 
 /* void clear(void);
  * Inputs: void
@@ -541,36 +536,42 @@ void panic(uint8_t *format, ...)
 }
 
 /* @usage: set the nth to mth bits of num to 1 */
-int set_bit(int num, int n, int m)
+int set_bits(int num, int n, int m)
 {
     int mask = 0, result = 0;
 
-    if (n > m) {
-        KERN_INFO("error argument, n is %d, m is %d", n, m);
+    if (n > m || n < 0 || m >= sizeof(num) * 8) {
+        KERN_INFO("error argument, n is %d, m is %d\n", n, m);
         return -EINVAL;
     }
-    // 创建一个掩码，其中第n到第m位为1，其余位为0
-    mask = ((1 << (m - n + 1)) - 1) << n;
 
-    // 使用按位或运算符将掩码与数字进行按位或操作
+    mask = ((1ll << (m - n + 1)) - 1) << n;
     result = num | mask;
 
     return result;
 }
 
 /* @usage: set the nth to mth bits of num to 0 */
-int clear_bit(int num, int n, int m) {
+int clear_bits(int num, int n, int m)
+{
     int mask = 0, result = 0;
 
-    if (n > m) {
-        KERN_INFO("error argument, n is %d, m is %d", n, m);
+    if (n > m || n < 0 || m >= sizeof(num) * 8) {
+        KERN_INFO("error argument, n is %d, m is %d\n", n, m);
         return -EINVAL;
     }
-    // 创建一个掩码，其中第n到第m位为0，其余位为1
-    mask = ~(((1 << (m - n + 1)) - 1) << n);
 
-    // 使用按位与运算符将掩码与数字进行按位与操作
+    mask = ~(((1ll << (m - n + 1)) - 1) << n);
     result = num & mask;
 
     return result;
+}
+
+uint32_t get_bits(uint32_t num, int n, int m)
+{
+    if (n > m || n < 0 || m >= sizeof(num) * 8) {
+        KERN_INFO("error argument, n is %d, m is %d\n", n, m);
+        return -EINVAL;
+    }
+    return (num & ((1ll << (m+1))-1)) >> n;
 }
