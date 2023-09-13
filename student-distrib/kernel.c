@@ -68,10 +68,13 @@ void entry(unsigned long magic, unsigned long addr) {
     uint8_t apic_id = 0;
 
     console_init();
+    if (launch_tests() == false)
+        panic("test failed\n");
     /*
      * Check if MAGIC is valid and print the Multiboot information structure
      * pointed by ADDR.
      */
+    mprintf("This is test %d %lld %u %llu 0x%x 0x%llx and done\n", 16, 16ll, 16, 16ll,16, 16ll);
     multiboot_info(magic, addr);
 
     apic_id = get_apic_id();
@@ -147,8 +150,13 @@ void entry(unsigned long magic, unsigned long addr) {
     sti();
     if (init_paging(addr)) {
         KERN_INFO("paging init failed\n");
+        return;
     }
     enable_paging();
+    if (init_sched()) {
+        KERN_INFO("schedule init failed\n");
+        return;
+    }
     self_test();
 
     /* Enable paging */

@@ -4,6 +4,7 @@
 #include "lib.h"
 #include "errno.h"
 #include "vga.h"
+#include "stdarg.h"
 
 static int screen_x;
 static int screen_y;
@@ -166,6 +167,94 @@ format_char_switch:
     return (buf - format);
 }
 
+uint32_t mprintf(char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    int d, cnt = 0;
+    long long ld = 0;
+    char *s;
+    char c;
+    unsigned long long lu = 0;
+#define MAX_PRINT_BUF_SIZE 100
+    /* The last 3 bytes should be always 0, it's used for check if there is a overflow */
+    char buf[MAX_PRINT_BUF_SIZE+3] = {0};
+
+    while (*fmt) {
+        if (*fmt == '%') {
+            char base = 10;
+            char size = 0;
+            char num_buf[20] = {0};
+            char len = 0;
+again:
+            ld = 0;
+            lu = 0;
+            fmt++;
+            if (!*fmt) {
+                goto out;
+            }
+            switch (*fmt) {
+            case '%':
+                cnt += 1;
+                break;
+            case 's':
+                s = va_arg(ap, char*);
+                len = strlen(s);
+                memcpy(buf+cnt, s, len);
+                cnt += len;
+                break;
+            case 'x':
+                base = 16;
+            case 'd':
+                if (size == 32 || size == 0) {
+                    ld = va_arg(ap, int);
+                } else if (size == 64) {
+                    ld = va_arg(ap, long long);
+                } else {
+                    panic("invalid size\n");
+                }
+                len = itoa(ld, num_buf, base);
+                memcpy(buf+cnt, num_buf, len);
+                cnt += len;
+                break;
+            case 'u':
+                if (size == 32 || size == 0) {
+                    lu = va_arg(ap, unsigned int);
+                } else if (size == 64) {
+                    lu = va_arg(ap, unsigned long long);
+                } else {
+                    panic("invalid size\n");
+                }
+                len = itollu(lu, num_buf, base);
+                memcpy(buf+cnt, num_buf, len);
+                cnt += len;
+                break;
+            case 'l':
+                size += 32;
+                size = size > 64 ? 64 : size;
+                goto again;
+            case 'c':
+                c = va_arg(ap, char);
+                buf[cnt] = c;
+                cnt += 1;
+                break;
+            default:
+                break;
+            };
+        } else {
+            buf[cnt] = *fmt;
+            cnt++;
+        }
+        fmt++;
+    }
+out:
+    va_end(ap);
+
+    puts(buf);
+
+    return cnt;
+}
+
 /* int32_t puts(int8_t* s);
  *   Inputs: int_8* s = pointer to a string of characters
  *   Return Value: Number of bytes written
@@ -189,6 +278,10 @@ void putc(uint8_t c) {
         screen_x = 0;
     } else if (c == '\b') {
         screen_x--;
+        if (screen_x < 0) {
+            screen_x = NUM_COLS-1;
+            screen_y = (screen_y - 1 >= 0) ? screen_y-1 : 0;
+        }
         *(uint8_t *)(video_mem + ((NUM_COLS * screen_y + screen_x) << 1)) = ' ';
         *(uint8_t *)(video_mem + ((NUM_COLS * screen_y + screen_x) << 1) + 1) = ATTRIB;
     } else {
@@ -208,7 +301,7 @@ void putc(uint8_t c) {
  *          int32_t radix = base system. hex, oct, dec, etc.
  * Return Value: number of bytes written
  * Function: Convert a number to its ASCII representation, with base "radix" */
-int8_t* itoa(uint32_t value, int8_t* buf, int32_t radix) {
+int8_t itoa(uint32_t value, int8_t* buf, int32_t radix) {
     static int8_t lookup[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     int8_t *newbuf = buf;
     int32_t i;
@@ -218,7 +311,7 @@ int8_t* itoa(uint32_t value, int8_t* buf, int32_t radix) {
     if (value == 0) {
         buf[0] = '0';
         buf[1] = '\0';
-        return buf;
+        return 1;
     }
 
     /* Go through the number one place value at a time, and add the
@@ -237,10 +330,11 @@ int8_t* itoa(uint32_t value, int8_t* buf, int32_t radix) {
     *newbuf = '\0';
 
     /* Reverse the string and return */
-    return strrev(buf);
+    strrev(buf);
+    return newbuf - buf;
 }
 
-int8_t* itollu(uint64_t value, int8_t* buf, int32_t radix) {
+int8_t itollu(uint64_t value, int8_t* buf, int32_t radix) {
     static int8_t lookup[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     int8_t *newbuf = buf;
     int32_t i;
@@ -250,7 +344,7 @@ int8_t* itollu(uint64_t value, int8_t* buf, int32_t radix) {
     if (value == 0) {
         buf[0] = '0';
         buf[1] = '\0';
-        return buf;
+        return 1;
     }
 
     /* Go through the number one place value at a time, and add the
@@ -269,7 +363,9 @@ int8_t* itollu(uint64_t value, int8_t* buf, int32_t radix) {
     *newbuf = '\0';
 
     /* Reverse the string and return */
-    return strrev(buf);
+    strrev(buf);
+
+    return newbuf - buf;
 }
 
 /* int8_t* strrev(int8_t* s);
@@ -527,12 +623,6 @@ void test_interrupts(void) {
     for (i = 0; i < NUM_ROWS * NUM_COLS; i++) {
         video_mem[i << 1]++;
     }
-}
-
-void panic(uint8_t *format, ...)
-{
-    // KERN_INFO(format, args);
-    /* todo: reboot */
 }
 
 /* @usage: set the nth to mth bits of num to 1 */

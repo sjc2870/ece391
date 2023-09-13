@@ -33,6 +33,8 @@ typedef uint8_t  u8;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
+typedef unsigned long size_t;
+
 #endif /* ASM */
 
 #endif /* _TYPES_H */

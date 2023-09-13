@@ -8,7 +8,6 @@
 
 static u8 buf[3];
 static u8 offset = 0;
-static u8 buttons = 0;
 static char x, y;
 
 int mouse_init()

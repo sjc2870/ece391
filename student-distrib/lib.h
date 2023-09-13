@@ -12,10 +12,11 @@
 #define CHECK_FLAG(flags, bit)   ((flags) & (1 << (bit)))
 
 int32_t printf(int8_t *format, ...);
+uint32_t mprintf(char *fmt, ...);
 void putc(uint8_t c);
 int32_t puts(int8_t *s);
-int8_t *itoa(uint32_t value, int8_t* buf, int32_t radix);
-int8_t* itollu(uint64_t value, int8_t* buf, int32_t radix);
+int8_t itoa(uint32_t value, int8_t* buf, int32_t radix);
+int8_t itollu(uint64_t value, int8_t* buf, int32_t radix);
 int8_t *strrev(int8_t* s);
 uint32_t strlen(const int8_t* s);
 void clear(void);
@@ -31,8 +32,11 @@ do {                                                    \
            __func__, __FILE__, __LINE__, ## args);      \
 } while(0)
 
-
-void panic(uint8_t *format, ...);
+#define panic(fmt, args...) \
+do {                        \
+    printf("#######PANIC#######\n");    \
+    KERN_INFO(fmt, args);               \
+} while(0)
 
 void* memset(void* s, int32_t c, uint32_t n);
 void* memset_word(void* s, int32_t c, uint32_t n);

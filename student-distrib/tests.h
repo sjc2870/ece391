@@ -1,7 +1,9 @@
-#ifndef TESTS_H
-#define TESTS_H
+#ifndef _TESTS_H
+#define _TESTS_H
+
+#include "tests/test_list.h"
 
 // test launcher
-void launch_tests();
+bool launch_tests();
 
-#endif /* TESTS_H */
+#endif /* _TESTS_H */

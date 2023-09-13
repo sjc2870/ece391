@@ -4,6 +4,7 @@
 #include "multiboot.h"
 #include "types.h"
 #include "vga.h"
+#include "list.h"
 
 extern int __text_start;
 extern int __text_end;
@@ -43,18 +44,22 @@ uint64_t phy_mem_base;
 uint64_t phy_mem_len;
 pgd_t *init_pgtbl_dir;
 
+#define MAX_ORDER 11    // max free list is 4M(4K * 2^(11-1))
+
+static struct list free_pages_head[MAX_ORDER];
+
 /* @NOTE: caller must hold mm lock */
 #define ITERATE_PAGES(free_statements, used_statements)     \
-    int ___i, ___j;                                         \
+    int __cur_slot, __cur_bit;                                         \
     int ___nr_slots = ((phy_mem_len / PAGE_SIZE) + 32)/32;  \
-    for (___i = 0; ___i < ___nr_slots; ++___i) {    \
+    for (__cur_slot = 0; __cur_slot < ___nr_slots; ++__cur_slot) {    \
         /* every bit in uint32 */                   \
-        for (___j = 0; ___j < 32; ++___j) {         \
+        for (__cur_bit = 0; __cur_bit < 32; ++__cur_bit) {         \
             /*                                                                  \
              * See if bit (32-j-1) was set. Cause we set bit from up to down.   \
              * For example: j=0 represents bit 31, j=1 represents bit 30 ... j=31 represents bit 0  \
              */                                                                                     \
-            if (!(mem_bitmap[___i] & (1 << (32-___j-1)))) {                                         \
+            if (!(mem_bitmap[__cur_slot] & (1 << (32-__cur_bit-1)))) {                                         \
                 free_statements;                                                                    \
             } else {                                                                                \
                 used_statements;                                                                    \
@@ -67,10 +72,13 @@ pgd_t *init_pgtbl_dir;
 void* alloc_pgdir()
 {
     ITERATE_PAGES({
-        uint32_t cur_addr = PAGE_SIZE *(___i*32+___j)+phy_mem_base;
-        mem_bitmap[___i] |= (1 << (32-___j-1));
+        uint32_t cur_addr = PAGE_SIZE *(__cur_slot*32+__cur_bit)+phy_mem_base;
+        mem_bitmap[__cur_slot] |= (1 << (32-__cur_bit-1));
         return (void*)cur_addr;
         }, {});
+
+    KERN_INFO("failed to alloc pgdir\n");
+    return NULL;
 }
 
 int page_bitmap_init(unsigned long addr)
@@ -144,7 +152,7 @@ int page_bitmap_init(unsigned long addr)
         }
     }
     ITERATE_PAGES({}, {
-        unsigned long cur_addr = PAGE_SIZE * (___i*32 + ___j) + phy_mem_base;
+        unsigned long cur_addr = PAGE_SIZE * (__cur_slot*32 + __cur_bit) + phy_mem_base;
         printf("address %x is used\n", cur_addr);
     });
 
@@ -206,6 +214,10 @@ static void paging_test()
     // pte = ((uint32_t*)pde)[pde_offset];
     phy_addr = pte & ~(PAGE_MASK);
     phy_addr |= pte_offset;
+
+    if (phy_addr != linear_addr) {
+        printf("BUG: paging error\n");
+    }
 }
 
 int page_table_init()
@@ -221,16 +233,81 @@ int page_table_init()
      *                0x(&__kernel_end) to phy addr 0x(&__kernel_end)
      */
 
-     ITERATE_PAGES({}, {
-        unsigned long cur_addr = PAGE_SIZE * (___i*32 + ___j) + phy_mem_base;
-        if (cur_addr >= (unsigned long)&__kernel_start )
-            add_page_mapping(cur_addr, cur_addr);
-     });
-     add_page_mapping(VIDEO_MEM , VIDEO_MEM);
+    ITERATE_PAGES({}, {
+       unsigned long cur_addr = PAGE_SIZE * (__cur_slot*32 + __cur_bit) + phy_mem_base;
+       if (cur_addr >= (unsigned long)&__kernel_start)
+           add_page_mapping(cur_addr, cur_addr);
+    });
+    add_page_mapping(VIDEO_MEM , VIDEO_MEM);
 
-     paging_test();
+    paging_test();
 
     return 0;
+}
+
+static bool pages_is_free(unsigned long addr, uint8_t order)
+{
+    int cur_slot = 0;
+    int cur_bit = 0;
+    int nr_bits = 1 >> order;
+
+    cur_slot = (addr - phy_mem_base)/PAGE_SIZE/32;
+    cur_bit = ((addr - phy_mem_base)/PAGE_SIZE)%32;
+    if (cur_bit >= 8) {
+        panic("invalid bits %d\n", cur_bit);
+    }
+
+    if (cur_bit != 0 && nr_bits >= (8-cur_bit)) {
+        // 先处理那些非byte对齐的bit
+        int bs = 8 - cur_bit;
+        char c = mem_bitmap[cur_slot];
+    }
+
+    if (nr_bits >= sizeof(uint64_t)) {
+        nr_bits %= 64;
+
+        return false;
+    }
+
+    if (nr_bits >= sizeof(uint32_t)) {
+        nr_bits %= 32;
+
+        return false;
+    }
+
+    if (nr_bits >= sizeof(uint16_t)) {
+        nr_bits %= 16;
+
+        return false;
+    }
+
+    if (nr_bits >= sizeof(uint8_t)) {
+        nr_bits %= 8;
+
+        return false;
+    }
+
+    if (nr_bits >= 0) {
+
+        return false;
+    }
+
+    return true;
+}
+
+int init_free_pages_list()
+{
+    int i = 0;
+    for (i = 0; i < MAX_ORDER; ++i) {
+        INIT_LIST(&free_pages_head[i]);
+    }
+
+    ITERATE_PAGES({
+        uint32_t cur_addr = PAGE_SIZE *(__cur_slot*32+__cur_bit)+phy_mem_base;
+        INIT_LIST((struct list*)cur_addr);
+        list_add_tail(&free_pages_head, (void*)cur_addr);
+        return (void*)cur_addr;
+        }, {});
 }
 
 int init_paging(unsigned long addr)
@@ -241,17 +318,25 @@ int init_paging(unsigned long addr)
         return ret;
     }
 
+    if ((ret = init_free_pages_list())) {
+        return ret;
+    }
+
     if ((ret = page_table_init()))
         return ret;
 
     return ret;
 }
 
-void * kmalloc(uint32_t size)
+void *kmalloc(uint32_t size)
 {
-    uint32_t pages = (size + PAGE_SIZE)/PAGE_SIZE;
-    unsigned long ret_addr = 0;
     /* lock */
+    ITERATE_PAGES({
+        uint32_t cur_addr = PAGE_SIZE *(__cur_slot*32+__cur_bit)+phy_mem_base;
+        mem_bitmap[__cur_slot] |= (1 << (32-__cur_bit-1));
+        return (void*)cur_addr;
+        }, {});
+    return NULL;
 
     /* unlock */
 }
