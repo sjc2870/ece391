@@ -169,7 +169,7 @@ format_char_switch:
 
 void vsprintf(char *buf, const char *fmt, va_list ap)
 {
-    int d, cnt = 0;
+    int cnt = 0;
     long long ld = 0;
     char *s;
     char c;
@@ -229,7 +229,7 @@ again:
                 size = size > 64 ? 64 : size;
                 goto again;
             case 'c':
-                c = va_arg(ap, char);
+                c = va_arg(ap, int);
                 buf[cnt] = c;
                 cnt += 1;
                 break;
@@ -248,7 +248,7 @@ uint32_t mprintf(char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    int d, cnt = 0;
+    int cnt = 0;
     long long ld = 0;
     char *s;
     char c;
@@ -311,7 +311,7 @@ again:
                 size = size > 64 ? 64 : size;
                 goto again;
             case 'c':
-                c = va_arg(ap, char);
+                c = va_arg(ap, int);
                 buf[cnt] = c;
                 cnt += 1;
                 break;

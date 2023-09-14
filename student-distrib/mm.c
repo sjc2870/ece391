@@ -169,14 +169,12 @@ int add_page_mapping(uint32_t linear_addr, uint32_t phy_addr)
 {
     uint32_t pgd_offset = 0;
     uint32_t pde_offset = 0;
-    uint32_t pte_offset = 0;
     pde_t pde;  // pde represents 4M size memory
     pte_t pte;  // pte represents 4K size memory
 
 
     pgd_offset = get_bits(linear_addr, 22, 31);
     pde_offset = get_bits(linear_addr, 12, 21);
-    pte_offset = get_bits(linear_addr, 0, 11);
 
     pde = (uint32_t)init_pgtbl_dir[pgd_offset];
     if (!pde) {
@@ -303,7 +301,6 @@ static bool pages_is_free(unsigned long addr, uint8_t order)
         }
     }
 
-out_free:
     return true;
 out_used:
     if (order == 0)
@@ -319,7 +316,7 @@ static unsigned long __init_free_pages_list(unsigned long addr)
 
     while (order >= 0) {
         if (pages_is_free(addr, order) == true) {
-            head = &free_pages_head[order];
+            head = &free_pages_head[(int)order];
             break;
         }
         order--;

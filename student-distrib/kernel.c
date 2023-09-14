@@ -63,9 +63,8 @@ static void self_test()
     asm volatile ("int $0x3");
 }
 
-void entry(unsigned long magic, unsigned long addr) {
-
-    uint8_t apic_id = 0;
+void entry(unsigned long magic, unsigned long addr)
+{
 
     console_init();
     if (launch_tests() == false)
@@ -77,7 +76,7 @@ void entry(unsigned long magic, unsigned long addr) {
     mprintf("This is test %d %lld %u %llu 0x%x 0x%llx and done\n", 16, 16ll, 16, 16ll,16, 16ll);
     multiboot_info(magic, addr);
 
-    apic_id = get_apic_id();
+    get_apic_id();
 
     {
         char vendor[12];
