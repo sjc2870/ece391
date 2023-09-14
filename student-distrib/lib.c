@@ -167,6 +167,83 @@ format_char_switch:
     return (buf - format);
 }
 
+void vsprintf(char *buf, const char *fmt, va_list ap)
+{
+    int d, cnt = 0;
+    long long ld = 0;
+    char *s;
+    char c;
+    unsigned long long lu = 0;
+
+    while (*fmt) {
+        if (*fmt == '%') {
+            char base = 10;
+            char size = 0;
+            char num_buf[20] = {0};
+            char len = 0;
+again:
+            ld = 0;
+            lu = 0;
+            fmt++;
+            if (!*fmt) {
+                break;
+            }
+            switch (*fmt) {
+            case '%':
+                cnt += 1;
+                break;
+            case 's':
+                s = va_arg(ap, char*);
+                len = strlen(s);
+                memcpy(buf+cnt, s, len);
+                cnt += len;
+                break;
+            case 'x':
+                base = 16;
+            case 'd':
+                if (size == 32 || size == 0) {
+                    ld = va_arg(ap, int);
+                } else if (size == 64) {
+                    ld = va_arg(ap, long long);
+                } else {
+                    panic("invalid size\n");
+                }
+                len = itoa(ld, num_buf, base);
+                memcpy(buf+cnt, num_buf, len);
+                cnt += len;
+                break;
+            case 'u':
+                if (size == 32 || size == 0) {
+                    lu = va_arg(ap, unsigned int);
+                } else if (size == 64) {
+                    lu = va_arg(ap, unsigned long long);
+                } else {
+                    panic("invalid size\n");
+                }
+                len = itollu(lu, num_buf, base);
+                memcpy(buf+cnt, num_buf, len);
+                cnt += len;
+                break;
+            case 'l':
+                size += 32;
+                size = size > 64 ? 64 : size;
+                goto again;
+            case 'c':
+                c = va_arg(ap, char);
+                buf[cnt] = c;
+                cnt += 1;
+                break;
+            default:
+                break;
+            };
+        } else {
+            buf[cnt] = *fmt;
+            cnt++;
+        }
+        fmt++;
+    }
+}
+
 uint32_t mprintf(char *fmt, ...)
 {
     va_list ap;
@@ -625,6 +702,24 @@ void test_interrupts(void) {
     }
 }
 
+void __panic(int8_t *format, ...)
+{
+    char buf[103] = {0};
+    va_list ap;
+
+    va_start(ap, format);
+    printf("############PANIC############\n");
+    vsprintf(buf, format, ap);
+
+    if (buf[100] !=0 || buf[101] != 0 || buf[102] != 0) {
+        printf("buf overflowed\n");
+        buf[100] = '\0';
+    }
+
+    printf("%s\n", buf);
+    /* todo: reboot */
+}
+
 /* @usage: set the nth to mth bits of num to 1 */
 int set_bits(int num, int n, int m)
 {
@@ -660,7 +755,7 @@ int clear_bits(int num, int n, int m)
 uint32_t get_bits(uint32_t num, int n, int m)
 {
     if (n > m || n < 0 || m >= sizeof(num) * 8) {
-        KERN_INFO("error argument, n is %d, m is %d\n", n, m);
+        panic("error argument, n is %d, m is %d\n", n, m);
         return -EINVAL;
     }
     return (num & ((1ll << (m+1))-1)) >> n;

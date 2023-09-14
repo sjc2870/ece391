@@ -25,6 +25,10 @@ void clear(void);
 int set_bits(int num, int n, int m);
 int clear_bits(int num, int n, int m);
 uint32_t get_bits(uint32_t num, int n, int m);
+void __panic(int8_t *format, ...);
+
+#define likely(x) __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
 
 #define KERN_INFO(format, args...)                      \
 do {                                                    \
@@ -34,8 +38,14 @@ do {                                                    \
 
 #define panic(fmt, args...) \
 do {                        \
-    printf("#######PANIC#######\n");    \
-    KERN_INFO(fmt, args);               \
+    KERN_INFO("####### PANIC #######\n");   \
+    __panic(fmt, ## args);                  \
+} while(0)
+
+#define panic_on(cond, fmt, args...)\
+do {                                \
+    if (unlikely(cond))             \
+        panic(fmt, ## args);        \
 } while(0)
 
 void* memset(void* s, int32_t c, uint32_t n);

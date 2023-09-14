@@ -7,7 +7,7 @@
 #define PAGE_SIZE 4096
 #define PAGE_MASK (PAGE_SIZE-1)
 
-#define SLOTS 4096
+#define SLOTS 4096*4
 
 extern int init_paging(unsigned long addr);
 extern void* kmalloc(uint32_t size);

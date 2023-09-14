@@ -6,14 +6,14 @@
 #include "vga.h"
 #include "list.h"
 
-extern int __text_start;
-extern int __text_end;
-extern int __data_start;
-extern int __data_end;
-extern int __bss_start;
-extern int __bss_end;
-extern int __kernel_start;
-extern int __kernel_end;
+extern const int __text_start;
+extern const int __text_end;
+extern const int __data_start;
+extern const int __data_end;
+extern const int __bss_start;
+extern const int __bss_end;
+extern const int __kernel_start;
+extern const int __kernel_end;
 
 /*
  * @reference:
@@ -39,27 +39,26 @@ extern int __kernel_end;
  * @WARN: when memory is larger than 512MB, SLOTS MUST be larger, otherwise unexpected memory overwritten
           will happen.
  */
-uint32_t mem_bitmap[SLOTS];
+uint8_t mem_bitmap[SLOTS];
+#define BITS_IN_SLOT (sizeof(mem_bitmap[0])*8)
 uint64_t phy_mem_base;
 uint64_t phy_mem_len;
+uint64_t phy_mem_end;
 pgd_t *init_pgtbl_dir;
 
-#define MAX_ORDER 11    // max free list is 4M(4K * 2^(11-1))
+#define MAX_ORDER 10    // max free list is 4M(4K * 2^10)
 
-static struct list free_pages_head[MAX_ORDER];
+static struct list free_pages_head[MAX_ORDER + 1];
 
 /* @NOTE: caller must hold mm lock */
 #define ITERATE_PAGES(free_statements, used_statements)     \
     int __cur_slot, __cur_bit;                                         \
-    int ___nr_slots = ((phy_mem_len / PAGE_SIZE) + 32)/32;  \
+    int ___nr_slots = ((phy_mem_len / PAGE_SIZE) + BITS_IN_SLOT)/BITS_IN_SLOT;  \
     for (__cur_slot = 0; __cur_slot < ___nr_slots; ++__cur_slot) {    \
-        /* every bit in uint32 */                   \
-        for (__cur_bit = 0; __cur_bit < 32; ++__cur_bit) {         \
-            /*                                                                  \
-             * See if bit (32-j-1) was set. Cause we set bit from up to down.   \
-             * For example: j=0 represents bit 31, j=1 represents bit 30 ... j=31 represents bit 0  \
-             */                                                                                     \
-            if (!(mem_bitmap[__cur_slot] & (1 << (32-__cur_bit-1)))) {                                         \
+        /* every bit in uint8 */                   \
+        for (__cur_bit = 0; __cur_bit < BITS_IN_SLOT; ++__cur_bit) {         \
+            /* See if bit __cur_bit was set.*/                               \
+            if (!(mem_bitmap[__cur_slot] & (1 << __cur_bit))) {              \
                 free_statements;                                                                    \
             } else {                                                                                \
                 used_statements;                                                                    \
@@ -72,8 +71,8 @@ static struct list free_pages_head[MAX_ORDER];
 void* alloc_pgdir()
 {
     ITERATE_PAGES({
-        uint32_t cur_addr = PAGE_SIZE *(__cur_slot*32+__cur_bit)+phy_mem_base;
-        mem_bitmap[__cur_slot] |= (1 << (32-__cur_bit-1));
+        uint32_t cur_addr = PAGE_SIZE *(__cur_slot*BITS_IN_SLOT+__cur_bit)+phy_mem_base;
+        mem_bitmap[__cur_slot] |= (1 << __cur_bit);
         return (void*)cur_addr;
         }, {});
 
@@ -104,6 +103,7 @@ int page_bitmap_init(unsigned long addr)
                     (unsigned)mmap->length_low);
             phy_mem_base = (((unsigned long long)mmap->base_addr_high) << 32) | (unsigned)mmap->base_addr_low;
             phy_mem_len = (((unsigned long long)mmap->length_high) << 32) | (unsigned)mmap->length_low;
+            phy_mem_end = phy_mem_base + phy_mem_len;
         }
     }
 
@@ -117,7 +117,7 @@ int page_bitmap_init(unsigned long addr)
     memset(mem_bitmap, 0xffffffff, sizeof(mem_bitmap));
 
     nr_pages = phy_mem_len / PAGE_SIZE;
-    nr_slots = (nr_pages+32)/32;
+    nr_slots = (nr_pages+BITS_IN_SLOT)/BITS_IN_SLOT;
     printf("Memory base is %llx, size is %llx, there are %u pages, used %u slots\n",
            phy_mem_base, phy_mem_len, nr_pages, nr_slots);
     printf("bss start is %lx, bss end is %lx\n", (unsigned long)&__bss_start, (unsigned long)&__bss_end);
@@ -128,15 +128,15 @@ int page_bitmap_init(unsigned long addr)
          * qemu -m $memory is too large, or SLOTS was defined too small
          * Ajust one of them, otherwise will happen unexpected memory overwritten.
          */
-        KERN_INFO("BUG: error memory\n");
+        KERN_INFO("BUG: error memory. BITS_IN_SLOT is %d, nr_slots is %d, SLOTS is %d\n", BITS_IN_SLOT, nr_slots, SLOTS);
         return -EINVAL;
     }
 
-    /* every uint32 in mem_bitmap array */
+    /* every uint8 in mem_bitmap array */
     for (i = 0; i < nr_slots; ++i) {
-        /* every bit in uint32 */
-        for (j = 0; j < 32; ++j) {
-            unsigned long cur_addr = PAGE_SIZE * (i*32 + j) + phy_mem_base;
+        /* every bit in uint8 */
+        for (j = 0; j < BITS_IN_SLOT; ++j) {
+            unsigned long cur_addr = PAGE_SIZE * (i*BITS_IN_SLOT + j) + phy_mem_base;
             /* mark kernel memory as used */
             if (cur_addr >= (unsigned long)&__kernel_start && cur_addr < (unsigned long)&__kernel_end) {
                 // printf("cur addr %x is in kernel region, continue\n", cur_addr);
@@ -147,13 +147,18 @@ int page_bitmap_init(unsigned long addr)
                 // printf("cur addr %x is in stack region, continue\n", cur_addr);
                 continue;
             }
-            /* We clear bit from up to down. */
-            mem_bitmap[i] &= ~(1 << (32-j-1));
+
+            /* Actually it's not necessary, because VIDEM_MEM is lower than phy_mem_base */
+            if (cur_addr >= VIDEO_MEM && cur_addr < VIDEO_MEM+PAGE_SIZE) {
+                continue;
+            }
+            /* We clear bit from down to up. */
+            mem_bitmap[i] &= ~(1 << j);
         }
     }
     ITERATE_PAGES({}, {
-        unsigned long cur_addr = PAGE_SIZE * (__cur_slot*32 + __cur_bit) + phy_mem_base;
-        printf("address %x is used\n", cur_addr);
+        unsigned long cur_addr = PAGE_SIZE * (__cur_slot*BITS_IN_SLOT + __cur_bit) + phy_mem_base;
+        printf("address %x is used, slot is %d, bit is %d\n", cur_addr, __cur_slot, __cur_bit);
     });
 
     return 0;
@@ -228,13 +233,13 @@ int page_table_init()
     /*
      * We must ensure that
      * linear address 0x&__kenel_start map to phy addr 0x&_kernel_start
-     *                0x(&__kernel_start + 4k) to phy addr 0x(&__kernel_start + 4k)
+     *                0x(&__kernel_start + 4k) map to phy addr 0x(&__kernel_start + 4k)
      *                ...
-     *                0x(&__kernel_end) to phy addr 0x(&__kernel_end)
+     *                0x(&__kernel_end) map to phy addr 0x(&__kernel_end)
      */
 
     ITERATE_PAGES({}, {
-       unsigned long cur_addr = PAGE_SIZE * (__cur_slot*32 + __cur_bit) + phy_mem_base;
+       unsigned long cur_addr = PAGE_SIZE * (__cur_slot*BITS_IN_SLOT + __cur_bit) + phy_mem_base;
        if (cur_addr >= (unsigned long)&__kernel_start)
            add_page_mapping(cur_addr, cur_addr);
     });
@@ -245,69 +250,108 @@ int page_table_init()
     return 0;
 }
 
+/*
+ * Check if the contious (1 << order) pages begining at addr is freed
+ * For example: There are 3 bytes: 001000[00 00000000 00]000010
+ *              Check the bits in [...]
+ */
 static bool pages_is_free(unsigned long addr, uint8_t order)
 {
     int cur_slot = 0;
     int cur_bit = 0;
-    int nr_bits = 1 >> order;
+    int nr_bits = 1 << order;
 
-    cur_slot = (addr - phy_mem_base)/PAGE_SIZE/32;
-    cur_bit = ((addr - phy_mem_base)/PAGE_SIZE)%32;
-    if (cur_bit >= 8) {
-        panic("invalid bits %d\n", cur_bit);
+    cur_slot = (addr - phy_mem_base)/PAGE_SIZE/BITS_IN_SLOT;
+    cur_bit = ((addr - phy_mem_base)/PAGE_SIZE)%BITS_IN_SLOT;
+    if (cur_slot >= SLOTS) {
+        panic("invalid slot %d\n", cur_slot);
+        return false;
     }
 
-    if (cur_bit != 0 && nr_bits >= (8-cur_bit)) {
+    if (cur_bit != 0 && nr_bits > 0) {
         // 先处理那些非byte对齐的bit
-        int bs = 8 - cur_bit;
-        char c = mem_bitmap[cur_slot];
+        int remain_bits = 8 - cur_bit;
+        int bits = remain_bits;
+
+        if (nr_bits < remain_bits)
+            bits = nr_bits;
+        if (get_bits(mem_bitmap[cur_slot], cur_bit, cur_bit+bits-1) != 0) {
+            goto out_used;
+        }
+        nr_bits -= bits;
+        cur_slot++;
     }
 
-    if (nr_bits >= sizeof(uint64_t)) {
-        nr_bits %= 64;
+    panic_on(nr_bits < 0, "invalid bits %d\n", nr_bits);
+    // 再处理那些byte对齐的bits，直接作为uint8判断是否为0
+    if (nr_bits >= (sizeof(uint8_t) * 8)) {
+        int nr_slots = nr_bits/8;
 
-        return false;
-    }
+        while (nr_slots--) {
+            if (mem_bitmap[cur_slot] != 0)
+                goto out_used;
+            cur_slot++;
+        }
 
-    if (nr_bits >= sizeof(uint32_t)) {
-        nr_bits %= 32;
-
-        return false;
-    }
-
-    if (nr_bits >= sizeof(uint16_t)) {
-        nr_bits %= 16;
-
-        return false;
-    }
-
-    if (nr_bits >= sizeof(uint8_t)) {
         nr_bits %= 8;
-
-        return false;
     }
 
-    if (nr_bits >= 0) {
-
-        return false;
+    // 最后处理那些在尾部byte不对齐的bits
+    if (nr_bits > 0) {
+        if (get_bits(mem_bitmap[cur_slot], 0, nr_bits-1) != 0) {
+            goto out_used;
+        }
     }
 
+out_free:
     return true;
+out_used:
+    if (order == 0)
+        printf("addr %x is used, slot is %d, bit is %d\n", addr, cur_slot, cur_bit);
+    return false;
+}
+
+/* @return: return the next address to be inited */
+static unsigned long __init_free_pages_list(unsigned long addr)
+{
+    char order = MAX_ORDER;
+    struct list* head = NULL;
+
+    while (order >= 0) {
+        if (pages_is_free(addr, order) == true) {
+            head = &free_pages_head[order];
+            break;
+        }
+        order--;
+    }
+
+    if (!head) {
+        /* Means the page is used */
+        addr += PAGE_SIZE;
+        return addr;
+    }
+
+    INIT_LIST((struct list*)addr);
+    list_add_tail(head , (struct list*)addr);
+    addr += (PAGE_SIZE * (1 << order));
+
+    return addr;
 }
 
 int init_free_pages_list()
 {
     int i = 0;
-    for (i = 0; i < MAX_ORDER; ++i) {
+    unsigned long cur_addr = phy_mem_base;
+
+    for (i = 0; i <= MAX_ORDER; ++i) {
         INIT_LIST(&free_pages_head[i]);
     }
 
-    ITERATE_PAGES({
-        uint32_t cur_addr = PAGE_SIZE *(__cur_slot*32+__cur_bit)+phy_mem_base;
-        INIT_LIST((struct list*)cur_addr);
-        list_add_tail(&free_pages_head, (void*)cur_addr);
-        return (void*)cur_addr;
-        }, {});
+    while (cur_addr < phy_mem_end) {
+        cur_addr = __init_free_pages_list(cur_addr);
+    }
+
+    return 0;
 }
 
 int init_paging(unsigned long addr)
@@ -317,6 +361,7 @@ int init_paging(unsigned long addr)
     if ((ret = page_bitmap_init(addr))) {
         return ret;
     }
+    clear();
 
     if ((ret = init_free_pages_list())) {
         return ret;
