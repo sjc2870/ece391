@@ -38,7 +38,9 @@ do {                                                    \
 
 #define panic(fmt, args...) \
 do {                        \
-    KERN_INFO("####### PANIC #######\n");   \
+    printf("############  PANIC  ############\n");  \
+    printf("    ");                                 \
+    KERN_INFO("\n");   \
     __panic(fmt, ## args);                  \
 } while(0)
 
@@ -53,6 +55,7 @@ void* memset_word(void* s, int32_t c, uint32_t n);
 void* memset_dword(void* s, int32_t c, uint32_t n);
 void* memcpy(void* dest, const void* src, uint32_t n);
 void* memmove(void* dest, const void* src, uint32_t n);
+int memcmp(const void *s1, const void *s2, size_t n);
 int32_t strncmp(const int8_t* s1, const int8_t* s2, uint32_t n);
 int8_t* strcpy(int8_t* dest, const int8_t*src);
 int8_t* strncpy(int8_t* dest, const int8_t*src, uint32_t n);

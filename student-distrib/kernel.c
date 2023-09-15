@@ -12,6 +12,7 @@
 #include "intr_def.h"
 #include "keyboard.h"
 #include "mm.h"
+#include "sched.h"
 
 #define RUN_TESTS
 
@@ -67,8 +68,6 @@ void entry(unsigned long magic, unsigned long addr)
 {
 
     console_init();
-    if (launch_tests() == false)
-        panic("test failed\n");
     /*
      * Check if MAGIC is valid and print the Multiboot information structure
      * pointed by ADDR.
@@ -142,15 +141,17 @@ void entry(unsigned long magic, unsigned long addr)
     i8259_init();
     early_setup_idt();
     if (keyboard_init()) {
-        KERN_INFO("keyboard init failed\n");
+        panic("keyboard init failed\n");
         return;
     }
     clear();
     sti();
     if (init_paging(addr)) {
-        KERN_INFO("paging init failed\n");
+        panic("paging init failed\n");
         return;
     }
+    if (launch_tests() == false)
+        panic("test failed\n");
     enable_paging();
     if (init_sched()) {
         KERN_INFO("schedule init failed\n");

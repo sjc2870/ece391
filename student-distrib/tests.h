@@ -2,6 +2,7 @@
 #define _TESTS_H
 
 #include "tests/test_list.h"
+#include "tests/test_mm.h"
 
 // test launcher
 bool launch_tests();

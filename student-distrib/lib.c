@@ -76,6 +76,7 @@ format_char_switch:
                             goto format_char_switch;
 
                         /* Print a number in hexadecimal form */
+                        case 'p':
                         case 'x':
                             {
                                 int8_t conv_buf[64];
@@ -630,6 +631,18 @@ void* memmove(void* dest, const void* src, uint32_t n) {
     return dest;
 }
 
+int memcmp(const void *s1, const void *s2, size_t n)
+{
+    size_t ofs = 0;
+    char c1 = 0;
+
+    while (ofs < n && !(c1 = ((char*)s1)[ofs] - ((char*)s2)[ofs])) {
+        ofs++;
+    }
+
+    return c1;
+}
+
 /* int32_t strncmp(const int8_t* s1, const int8_t* s2, uint32_t n)
  * Inputs: const int8_t* s1 = first string to compare
  *         const int8_t* s2 = second string to compare
@@ -708,7 +721,6 @@ void __panic(int8_t *format, ...)
     va_list ap;
 
     va_start(ap, format);
-    printf("############PANIC############\n");
     vsprintf(buf, format, ap);
 
     if (buf[100] !=0 || buf[101] != 0 || buf[102] != 0) {
@@ -716,7 +728,8 @@ void __panic(int8_t *format, ...)
         buf[100] = '\0';
     }
 
-    printf("%s\n", buf);
+    printf("    %s\n", buf);
+	asm volatile("int $15");
     /* todo: reboot */
 }
 

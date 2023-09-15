@@ -46,9 +46,19 @@ uint64_t phy_mem_len;
 uint64_t phy_mem_end;
 pgd_t *init_pgtbl_dir;
 
-#define MAX_ORDER 10    // max free list is 4M(4K * 2^10)
+struct free_mem_stcutre {
+    struct list free_pages_head[MAX_ORDER];
+    uint32_t nr_free_pages[MAX_ORDER];
 
-static struct list free_pages_head[MAX_ORDER + 1];
+    uint32_t all_free_pages;
+};
+
+static struct free_mem_stcutre phy_mm_stcutre;
+
+static inline struct list* get_free_pages_head(char order)
+{
+    return &phy_mm_stcutre.free_pages_head[order];
+}
 
 /* @NOTE: caller must hold mm lock */
 #define ITERATE_PAGES(free_statements, used_statements)     \
@@ -70,14 +80,31 @@ static struct list free_pages_head[MAX_ORDER + 1];
 /* only alloc 4k size memory, used for alloc page table */
 void* alloc_pgdir()
 {
-    ITERATE_PAGES({
-        uint32_t cur_addr = PAGE_SIZE *(__cur_slot*BITS_IN_SLOT+__cur_bit)+phy_mem_base;
-        mem_bitmap[__cur_slot] |= (1 << __cur_bit);
-        return (void*)cur_addr;
-        }, {});
+    return alloc_page();
+}
 
-    KERN_INFO("failed to alloc pgdir\n");
-    return NULL;
+/* Get the slot and bit which addr belongs to */
+void page_bitmap_get_location(unsigned long addr, int *ret_slot, int *ret_bit)
+{
+    *ret_slot = (addr - phy_mem_base)/PAGE_SIZE/BITS_IN_SLOT;
+    *ret_bit = ((addr - phy_mem_base)/PAGE_SIZE)%BITS_IN_SLOT;
+}
+
+static inline void __page_bitmap_set(unsigned long addr, int slot, int bit)
+{
+    mem_bitmap[slot] |= (1 << bit);
+}
+
+void page_bitmap_set(void *addr, char order)
+{
+    int slot, bit, i;
+    unsigned long adr = (unsigned long)addr;
+
+    for (i = 0; i < (1 << order); ++i) {
+        page_bitmap_get_location(adr, &slot, &bit);
+        __page_bitmap_set(adr, slot, bit);
+        adr += PAGE_SIZE;
+    }
 }
 
 int page_bitmap_init(unsigned long addr)
@@ -152,8 +179,9 @@ int page_bitmap_init(unsigned long addr)
             if (cur_addr >= VIDEO_MEM && cur_addr < VIDEO_MEM+PAGE_SIZE) {
                 continue;
             }
-            /* We clear bit from down to up. */
             mem_bitmap[i] &= ~(1 << j);
+            /* We set content of all free pages to 0. Here will waste lots time. */
+            memset((void*)cur_addr, 0, PAGE_SIZE);
         }
     }
     ITERATE_PAGES({}, {
@@ -195,34 +223,6 @@ int add_page_mapping(uint32_t linear_addr, uint32_t phy_addr)
     return 0;
 }
 
-static void paging_test()
-{
-    uint32_t linear_addr = 0x5038fb;
-    // uint32_t linear_addr = 0x503841;
-    uint32_t pgd_offset = 0;
-    uint32_t pde_offset = 0;
-    uint32_t pte_offset = 0;
-    pde_t pde;
-    pte_t pte;
-    uint32_t phy_addr = 0;
-
-    pgd_offset = get_bits(linear_addr, 22, 31);
-    pde_offset = get_bits(linear_addr, 12, 21);
-    pte_offset = get_bits(linear_addr, 0, 11);
-
-    pde = (uint32_t)*(init_pgtbl_dir + pgd_offset);
-    pde &= ~(PAGE_MASK);
-    pte = *(uint32_t*)(pde + pde_offset*4);
-    pte &= ~(PAGE_MASK);
-    // pte = ((uint32_t*)pde)[pde_offset];
-    phy_addr = pte & ~(PAGE_MASK);
-    phy_addr |= pte_offset;
-
-    if (phy_addr != linear_addr) {
-        printf("BUG: paging error\n");
-    }
-}
-
 int page_table_init()
 {
     /* A pgd_t pointer points to a page, which contains 1024 pde_t */
@@ -243,14 +243,13 @@ int page_table_init()
     });
     add_page_mapping(VIDEO_MEM , VIDEO_MEM);
 
-    paging_test();
-
     return 0;
 }
 
 /*
- * Check if the contious (1 << order) pages begining at addr is freed
- * For example: There are 3 bytes: 001000[00 00000000 00]000010
+ * Check if the contious (1 << order) pages begining at addr is freed.
+ * For example: order == 4, check if all contious 16 bit are 0
+ *              There are 3 bytes: 001000[00 00000000 000000]10
  *              Check the bits in [...]
  */
 static bool pages_is_free(unsigned long addr, uint8_t order)
@@ -259,8 +258,7 @@ static bool pages_is_free(unsigned long addr, uint8_t order)
     int cur_bit = 0;
     int nr_bits = 1 << order;
 
-    cur_slot = (addr - phy_mem_base)/PAGE_SIZE/BITS_IN_SLOT;
-    cur_bit = ((addr - phy_mem_base)/PAGE_SIZE)%BITS_IN_SLOT;
+    page_bitmap_get_location(addr, &cur_slot, &cur_bit);
     if (cur_slot >= SLOTS) {
         panic("invalid slot %d\n", cur_slot);
         return false;
@@ -308,31 +306,58 @@ out_used:
     return false;
 }
 
+static pfn_t find_buddy_pfn(pfn_t pfn, char order)
+{
+    return pfn ^ (1 << order);
+}
+
+static inline unsigned long pfn_to_page(pfn_t pfn)
+{
+    return (pfn * PAGE_SIZE) + phy_mem_base;
+}
+
+static inline pfn_t page_to_pfn(unsigned long addr)
+{
+    return (addr - phy_mem_base) / PAGE_SIZE;
+}
+
 /* @return: return the next address to be inited */
 static unsigned long __init_free_pages_list(unsigned long addr)
 {
-    char order = MAX_ORDER;
+    char order = 0;
     struct list* head = NULL;
+    pfn_t pfn = page_to_pfn(addr);
+    pfn_t bd_pfn = find_buddy_pfn(pfn, order);
+    unsigned long bd_addr = pfn_to_page(bd_pfn);
+    unsigned adr = addr;
 
-    while (order >= 0) {
-        if (pages_is_free(addr, order) == true) {
-            head = &free_pages_head[(int)order];
+    if (!pages_is_free(addr, order)) {
+        return addr + PAGE_SIZE;
+    }
+
+    while (order < MAX_ORDER) {
+        if (!pages_is_free(bd_addr , order) || order == _MAX_ORDER) {
             break;
         }
-        order--;
+        if (addr != bd_addr && ((struct list*)bd_addr)->next) {
+            list_del((struct list*)bd_addr);
+            phy_mm_stcutre.nr_free_pages[order]--;
+        }
+        addr = addr < bd_addr ? addr : bd_addr;
+        order++;
+        pfn = page_to_pfn(addr);
+        bd_pfn = find_buddy_pfn(pfn, order);
+        bd_addr = pfn_to_page(bd_pfn);
     }
 
-    if (!head) {
-        /* Means the page is used */
-        addr += PAGE_SIZE;
-        return addr;
-    }
-
+    phy_mm_stcutre.nr_free_pages[order]++;
+    phy_mm_stcutre.all_free_pages += (1 << order);
+    head = get_free_pages_head(order);
     INIT_LIST((struct list*)addr);
     list_add_tail(head , (struct list*)addr);
-    addr += (PAGE_SIZE * (1 << order));
+    adr += (PAGE_SIZE * (1 << order));
 
-    return addr;
+    return adr;
 }
 
 int init_free_pages_list()
@@ -340,8 +365,9 @@ int init_free_pages_list()
     int i = 0;
     unsigned long cur_addr = phy_mem_base;
 
-    for (i = 0; i <= MAX_ORDER; ++i) {
-        INIT_LIST(&free_pages_head[i]);
+    memset(&phy_mm_stcutre, 0, sizeof(phy_mm_stcutre));
+    for (i = 0; i < MAX_ORDER; ++i) {
+        INIT_LIST(get_free_pages_head(i));
     }
 
     while (cur_addr < phy_mem_end) {
@@ -349,6 +375,20 @@ int init_free_pages_list()
     }
 
     return 0;
+}
+
+void mm_show_statistics(uint32_t ret[MAX_ORDER])
+{
+    int i = 0;
+    while (i < MAX_ORDER) {
+        if (ret) {
+            ret[i] = phy_mm_stcutre.nr_free_pages[i];
+        }
+        printf("order%d: %u\n", i, phy_mm_stcutre.nr_free_pages[i]);
+        ++i;
+    }
+
+    printf("There are %u free pages\n", phy_mm_stcutre.all_free_pages);
 }
 
 int init_paging(unsigned long addr)
@@ -363,9 +403,13 @@ int init_paging(unsigned long addr)
     if ((ret = init_free_pages_list())) {
         return ret;
     }
+    clear();
+    mm_show_statistics(NULL);
 
     if ((ret = page_table_init()))
         return ret;
+    clear();
+    mm_show_statistics(NULL);
 
     return ret;
 }
@@ -416,4 +460,114 @@ void enable_paging()
     a += 100;
     /* test video memory paging */
     printf("a is %d\n", a);
+}
+
+/*
+ * For example: split 2 pages from list3 which contains 8 pages
+ * Original state
+ *          list1:
+ *          list2:
+ *          list3: ********
+ * After step 1
+ *          list1:
+ *          list2:****
+ *          list3:****
+ * After step 2
+ *          list1:**
+ *          list2:****
+ *          list3:**
+ *
+ */
+static void split_free_pages_list(char cur_order, char ori_order)
+{
+    unsigned long addr = 0;
+    unsigned long cur_addr = 0;
+
+    addr = (unsigned long)(get_free_pages_head(cur_order)->next);
+
+    while (cur_order-- > ori_order) {
+        cur_addr = addr + ((1 << cur_order) * PAGE_SIZE);
+        list_add_tail(get_free_pages_head(cur_order), (struct list*)cur_addr);
+        phy_mm_stcutre.nr_free_pages[cur_order]++;
+    }
+}
+
+/* Get (1 << order) pages from buddy system */
+void* alloc_pages(char order)
+{
+    struct list *head = NULL;
+    char cur_order = order;
+    panic_on(order < 0 || order >= MAX_ORDER, "invalid request order %d\n", order);
+
+    while (cur_order >= 0 && cur_order < MAX_ORDER)  {
+        head = get_free_pages_head(cur_order);
+        if (list_empty(head)) {
+            cur_order++;
+            continue;
+        }
+        /* Found a free pages list */
+        head = head->next;
+        page_bitmap_set(head, order);
+        if (cur_order != order)
+            split_free_pages_list(cur_order, order);
+        list_del(head);
+        phy_mm_stcutre.nr_free_pages[cur_order]--;
+        phy_mm_stcutre.all_free_pages -= (1 << order);
+
+        panic_on(((unsigned long)head & PAGE_MASK), "invalid page address 0x%x\n", head);
+        return head;
+    }
+
+    return NULL;
+}
+
+static void try_to_merge(pfn_t pfn, char order)
+{
+    pfn_t buddy_pfn = find_buddy_pfn(pfn, order);
+    unsigned long page = pfn * PAGE_SIZE + phy_mem_base;
+    unsigned long buddy_page = buddy_pfn * PAGE_SIZE + phy_mem_base;
+    struct list *head = NULL;
+
+    while (pages_is_free(buddy_page, order)) {
+        list_del((void*)page);
+        list_del((void*)buddy_page);
+        phy_mm_stcutre.nr_free_pages[order] -= 2;
+        order++;
+
+        phy_mm_stcutre.nr_free_pages[order]++;
+        page = page < buddy_page ? page : buddy_page;
+        head = get_free_pages_head(order);
+        list_add_tail(head, (void*)page);
+
+        pfn = (page - phy_mem_base) / PAGE_SIZE;
+        buddy_pfn = find_buddy_pfn(pfn, order);
+        buddy_page = buddy_pfn * PAGE_SIZE + phy_mem_base;
+    }
+}
+
+/* Return (1 << order) pages to buddy system */
+void free_pages(void *addr, char order)
+{
+    // lock
+    pfn_t pfn = (unsigned long)(addr - phy_mem_base)/PAGE_SIZE;
+    struct list *head = NULL;
+    INIT_LIST(addr);
+
+    panic_on(order < 0 || order > MAX_ORDER, "invalid order %d\n", order);
+    phy_mm_stcutre.all_free_pages += (1 << order);
+    phy_mm_stcutre.nr_free_pages[order]++;
+    head = get_free_pages_head(order);
+    list_add_tail(head, addr);
+    try_to_merge(pfn, order);
+    // unlock
+}
+
+void* alloc_page()
+{
+    return alloc_pages(0);
+}
+
+void free_page(void *addr)
+{
+    free_pages(addr, 0);
 }
