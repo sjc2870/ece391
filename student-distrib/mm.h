@@ -28,6 +28,8 @@ typedef uint32_t pde_t;
 typedef uint32_t pte_t;
 typedef uint32_t pfn_t; // page frame number
 
+extern pgd_t *init_pgtbl_dir;
+
 #define PRESENT_BIT 0
 #define RW_BIT 1    // 0 read only, 1 read & write
 #define US_BIT 2    // User/supervisor; if 0, user-mode accesses are not allowed to the 4-KByte page referenced by this entry

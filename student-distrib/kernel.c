@@ -95,7 +95,7 @@ void entry(unsigned long magic, unsigned long addr)
     }
 
     /* Construct an LDT entry in the GDT */
-    /* {
+    {
         seg_desc_t the_ldt_desc;
         the_ldt_desc.granularity = 0x0;
         the_ldt_desc.opsize      = 0x1;
@@ -109,10 +109,10 @@ void entry(unsigned long magic, unsigned long addr)
         SET_LDT_PARAMS(the_ldt_desc, &ldt, ldt_size);
         ldt_desc_ptr = the_ldt_desc;
         lldt(KERNEL_LDT);
-    } */
+    }
 
     /* Construct a TSS entry in the GDT */
-    /* {
+    {
         seg_desc_t the_tss_desc;
         the_tss_desc.granularity   = 0x0;
         the_tss_desc.opsize        = 0x0;
@@ -132,13 +132,18 @@ void entry(unsigned long magic, unsigned long addr)
         tss.ldt_segment_selector = KERNEL_LDT;
         tss.ss0 = KERNEL_DS;
         tss.esp0 = 0x800000;  // stack top 8MB
+        tss.cr3 = (unsigned long)init_pgtbl_dir;
         ltr(KERNEL_TSS);
-    } */
+    }
 
     if (detect_apic() == false)
         return;
     /* Init the PIC */
     i8259_init();
+    if (init_timer()) {
+        panic("timer init failed\n");
+        return;
+    }
     early_setup_idt();
     if (keyboard_init()) {
         panic("keyboard init failed\n");

@@ -9,12 +9,12 @@
 #include "types.h"
 
 /* Segment selector values */
-#define KERNEL_CS   0x0010 // idx 2
-#define KERNEL_DS   0x0018 // idx 3
-#define USER_CS     0x0023 // idx 4
-#define USER_DS     0x002B // idx 5
-#define KERNEL_TSS  0x0030 // idx 6
-#define KERNEL_LDT  0x0038 // idx 7
+#define KERNEL_CS   0x0010 // (idx-02, ti-0(GDT) cpl-0)
+#define KERNEL_DS   0x0018 // (idx-03, ti-0(GDT) cpl-0)
+#define USER_CS     0x0023 // (idx-04, ti-0(GDT) cpl-3)
+#define USER_DS     0x002B // (idx-05, ti-0(GDT) cpl-3)
+#define KERNEL_TSS  0x0030 // (idx-06, ti-0(GDT) cpl-0)
+#define KERNEL_LDT  0x0038 // (idx-07, ti-0(GDT) cpl-0)
 
 /* Size of the task state segment (TSS) */
 #define TSS_SIZE    104
@@ -33,6 +33,17 @@ struct x86_desc {
     uint16_t size;
     uint32_t addr;
 } __attribute__ ((packed));
+
+struct seg_selector {
+    union {
+        uint16_t val;
+        struct {
+            uint8_t rpl:2;  /* Requested Privilege Level */
+            uint8_t ti:1;   /* Table Indicator. 0=GDT 1=LDT */
+            uint16_t idx:13;
+        } __attribute__ ((packed));
+    };
+};
 
 /* This is a segment descriptor.  It goes in the GDT. */
 typedef struct seg_desc {

@@ -164,11 +164,6 @@ static void intr0x80_handler()
     KERN_INFO("system call occured\n");
 }
 
-/* APIC_MASTER_FIRST_INTR */
-static void intr0x30_handler()
-{
-}
-
 /* APIC_MASTER_FIRST_INTR +3 */
 static void intr0x33_handler()
 {
@@ -225,7 +220,7 @@ void setup_intr_handler()
     SET_STATIC_INTR_HANDLER(0x13);
     SET_STATIC_INTR_HANDLER(0x14);
     SET_STATIC_INTR_HANDLER(0x15);
-    SET_STATIC_INTR_HANDLER(0x30);
+    SET_EXTERN_INTR_HANDLER(0x30);
     SET_EXTERN_INTR_HANDLER(0x31);
     SET_EXTERN_INTR_HANDLER(0x3C);
     SET_STATIC_INTR_HANDLER(0x80);

@@ -4,6 +4,7 @@
 #include "intr.h"
 #include "keyboard.h"
 #include "mouse.h"
+#include "timer.h"
 
 
 typedef void (*intr_handler_t)();
