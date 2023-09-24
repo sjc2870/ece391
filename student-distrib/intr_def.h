@@ -24,9 +24,32 @@ extern struct intr_entry intr_entry[256];
 
 extern void early_setup_idt();
 extern void ignore_intr();
+extern void intr0x1_entry();
+extern void intr0x2_entry();
+extern void intr0x3_entry();
+extern void intr0x4_entry();
+extern void intr0x5_entry();
+extern void intr0x6_entry();
+extern void intr0x7_entry();
+extern void intr0x8_entry();
+extern void intr0x9_entry();
+extern void intr0xA_entry();
+extern void intr0xB_entry();
+extern void intr0xC_entry();
+extern void intr0xD_entry();
+extern void intr0xE_entry();
+extern void intr0xF_entry();
+extern void intr0x10_entry();
+extern void intr0x11_entry();
+extern void intr0x12_entry();
+extern void intr0x13_entry();
+extern void intr0x14_entry();
+extern void intr0x15_entry();
+
 extern void intr0x30_entry();
 extern void intr0x31_entry();
 extern void intr0x3C_entry();
-
+extern void syscall_interrupt_entry();
+extern void timer_interrupt_entry();
 
 #endif

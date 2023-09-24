@@ -9,7 +9,7 @@
 .globl ldt_size, tss_size
 .globl gdt_desc, ldt_desc, tss_desc
 .globl tss, tss_desc_ptr, ldt, ldt_desc_ptr
-.globl gdt_ptr, gdt
+.globl gdt_ptr
 .globl idt_desc_ptr, idt
 
 .align 4
@@ -35,7 +35,7 @@ _tss:
 tss_bottom:
 
     .align  16
-gdt:
+gdt_ptr:
 _gdt:
 
     # First GDT entry cannot be used
@@ -43,10 +43,11 @@ _gdt:
 
     # NULL entry
     .quad 0
-    .quad 0x00CF9A000000FFFF # kernel cs
-    .quad 0x00CF92000000FFFF # kernel ds
-    .quad 0x00CFFA000000FFFF # user cs
-    .quad 0x00CFF2000000FFFF # user ds
+    .quad 0x00CF9A000000FFFF # kernel cs 0x00 C F 9 A 00 0000FFFF
+    .quad 0x00CF92000000FFFF # kernel ds 0x00 C F 9 2 00 0000FFFF
+    .quad 0x00CFFA000000FFFF # user cs   0x00 C F F A 00 0000FFFF
+    .quad 0x00CFF2000000FFFF # user ds   0x00 C F F 2 00 0000FFFF
+tss_desc_ptr:
     .quad 0x00CFF2000000FFFF # kernel tss
     .quad 0x00CFF2000000FFFF # kernel ldt
     .rept 248
@@ -71,26 +72,8 @@ gdt_end:
     # |----------------------------------------------------------------------|
 
 gdt_desc:
-    .word gdt_end - gdt - 1
-    .long gdt
-
-gdt_ptr: # address 0x000400d0
-    .quad 0
-    # Set up an entry for kernel CS
-    .quad 0x00CF9A000000FFFF
-
-    # Set up an entry for kernel DS
-    .quad 0x00CF92000000FFFF
-
-    # Set up an entry for user CS
-    .quad 0x00CFFA000000FFFF
-
-    # Set up an entry for user DS
-    .quad 0x00CFF2000000FFFF
-
-    # Set up an entry for TSS
-tss_desc_ptr:
-    .quad 0
+    .word gdt_end - gdt_ptr - 1
+    .long gdt_ptr
 
     # Set up one LDT
 ldt_desc_ptr:

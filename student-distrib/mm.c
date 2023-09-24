@@ -416,21 +416,17 @@ int init_paging(unsigned long addr)
 
 void *kmalloc(uint32_t size)
 {
-    /* lock */
-    ITERATE_PAGES({
-        uint32_t cur_addr = PAGE_SIZE *(__cur_slot*32+__cur_bit)+phy_mem_base;
-        mem_bitmap[__cur_slot] |= (1 << (32-__cur_bit-1));
-        return (void*)cur_addr;
-        }, {});
+    cli();
     return NULL;
 
-    /* unlock */
+    sti();
 }
 
 void kfree()
 {
-    /* lock */
-    /* unlock */
+    cli();
+
+    sti();
 }
 
 void enable_paging()
@@ -499,6 +495,7 @@ void* alloc_pages(char order)
     char cur_order = order;
     panic_on(order < 0 || order >= MAX_ORDER, "invalid request order %d\n", order);
 
+    cli();
     while (cur_order >= 0 && cur_order < MAX_ORDER)  {
         head = get_free_pages_head(cur_order);
         if (list_empty(head)) {
@@ -517,6 +514,7 @@ void* alloc_pages(char order)
         panic_on(((unsigned long)head & PAGE_MASK), "invalid page address 0x%x\n", head);
         return head;
     }
+    sti();
 
     return NULL;
 }
@@ -548,7 +546,7 @@ static void try_to_merge(pfn_t pfn, char order)
 /* Return (1 << order) pages to buddy system */
 void free_pages(void *addr, char order)
 {
-    // lock
+    cli();
     pfn_t pfn = (unsigned long)(addr - phy_mem_base)/PAGE_SIZE;
     struct list *head = NULL;
     INIT_LIST(addr);
@@ -559,7 +557,7 @@ void free_pages(void *addr, char order)
     head = get_free_pages_head(order);
     list_add_tail(head, addr);
     try_to_merge(pfn, order);
-    // unlock
+    sti();
 }
 
 void* alloc_page()
@@ -570,4 +568,12 @@ void* alloc_page()
 void free_page(void *addr)
 {
     free_pages(addr, 0);
+}
+
+/* page fault, with error code  */
+void page_fault_handler()
+{
+    unsigned long addr;
+    asm volatile ("");
+    KERN_INFO("page fault occured\n");
 }

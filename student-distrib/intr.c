@@ -1,3 +1,4 @@
+#include "intr.h"
 #include "intr_def.h"
 #include "types.h"
 #include "x86_desc.h"
@@ -116,12 +117,6 @@ static void intr0xD_handler()
     KERN_INFO("general protection occured\n");
 }
 
-/* page fault, with error code  */
-static void intr0xE_handler()
-{
-    KERN_INFO("page fault occured\n");
-}
-
 /* x87 fpu floating-point error(Math fault) */
 static void intr0x10_handler()
 {
@@ -156,12 +151,6 @@ static void intr0x14_handler()
 static void intr0x15_handler()
 {
     KERN_INFO("Control Protection Exception occured\n");
-}
-
-/* system call: SYSCALL_INTR */
-static void intr0x80_handler()
-{
-    KERN_INFO("system call occured\n");
 }
 
 /* APIC_MASTER_FIRST_INTR +3 */
@@ -212,7 +201,7 @@ void setup_intr_handler()
     SET_STATIC_INTR_HANDLER(0xB);
     SET_STATIC_INTR_HANDLER(0xC);
     SET_STATIC_INTR_HANDLER(0xD);
-    SET_STATIC_INTR_HANDLER(0xE);
+    SET_EXTERN_INTR_HANDLER(0xE);
     // 0xF was reserved
     SET_STATIC_INTR_HANDLER(0x10);
     SET_STATIC_INTR_HANDLER(0x11);
@@ -220,10 +209,8 @@ void setup_intr_handler()
     SET_STATIC_INTR_HANDLER(0x13);
     SET_STATIC_INTR_HANDLER(0x14);
     SET_STATIC_INTR_HANDLER(0x15);
-    SET_EXTERN_INTR_HANDLER(0x30);
     SET_EXTERN_INTR_HANDLER(0x31);
     SET_EXTERN_INTR_HANDLER(0x3C);
-    SET_STATIC_INTR_HANDLER(0x80);
 }
 
 void early_setup_idt()
@@ -238,7 +225,30 @@ void early_setup_idt()
         set_intr_gate(i, ignore_intr);
     }
 
-    set_intr_gate(PIC_TIMER_INTR, intr0x30_entry);
+    set_intr_gate(0x1, intr0x1_entry);
+    set_intr_gate(0x2, intr0x2_entry);
+    set_intr_gate(0x3, intr0x3_entry);
+    set_intr_gate(0x4, intr0x4_entry);
+    set_intr_gate(0x5, intr0x5_entry);
+    set_intr_gate(0x6, intr0x6_entry);
+    set_intr_gate(0x7, intr0x7_entry);
+    set_intr_gate(0x8, intr0x8_entry);
+    set_intr_gate(0x9, intr0x9_entry);
+    set_intr_gate(0xA, intr0xA_entry);
+    set_intr_gate(0xB, intr0xB_entry);
+    set_intr_gate(0xC, intr0xC_entry);
+    set_intr_gate(0xD, intr0xD_entry);
+    set_intr_gate(0xE, intr0xE_entry);
+    set_intr_gate(0xF, intr0xF_entry);
+    set_intr_gate(0x11, intr0x11_entry);
+    set_intr_gate(0x12, intr0x12_entry);
+    set_intr_gate(0x13, intr0x13_entry);
+    set_intr_gate(0x14, intr0x14_entry);
+    set_intr_gate(0x15, intr0x15_entry);
+
+    set_system_gate(SYSCALL_INTR, syscall_interrupt_entry);
+    set_intr_gate(PIC_TIMER_INTR, timer_interrupt_entry);
+
     set_intr_gate(PIC_KEYBOARD_INTR, intr0x31_entry);
     set_intr_gate(PIC_MOUSE_INTR, intr0x3C_entry);
     asm volatile ("lidt %0" ::"m"(idt_desc));
@@ -246,7 +256,7 @@ void early_setup_idt()
     setup_intr_handler();
 
     enable_irq(PIC_KEYBOARD_INTR - PIC_MASTER_FIRST_INTR);
-    enable_irq(PIC_TIMER_INTR - PIC_MASTER_FIRST_INTR);
+    // enable_irq(PIC_TIMER_INTR - PIC_MASTER_FIRST_INTR);
     // enable_irq(PIC_MOUSE_INTR - PIC_MASTER_FIRST_INTR);
 }
 

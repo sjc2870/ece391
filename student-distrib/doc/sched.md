@@ -38,5 +38,38 @@ And according to intel manual, it's said that
     c. If an exception causes an error code to be saved, it is pushed on the new stack after the EIP value
 
 所以事情的全貌应该是：
+    在第一次从内核返回到用户态之前，会设置tss的ss sp指针，指向内核栈的栈顶。
     当用户陷入到内核态后，由于这是陷入到更高的特权级，所以会造成栈的切换，内核栈的ss sp指针来自于tss中保存的地址。
     在内核栈中，cpu会压入被中断进程的ss esp eflags cs eip [error code]
+
+# multi-tasking workded
+## 难点记录
+    pre: 代码本身只是一堆二进制数据，并没有优先级之分。有优先级之分的是寄存器，也就代表了cpu当前运行代码的优先级
+         所以，同一份代码，内核能跑，用户也能跑。只是跑代码时候的cs ss所代表的优先级切换了，只不过在用用户态的优先级在跑和内核优先级能跑的代码
+    1. 首先是如何返回到用户态：只需要构造iret所需要的ss esp eflags cs eip，然后压入栈中，再执行iret指令即可
+        如果没能按照预期返回用户态，
+            1. 检查压入栈中的ss esp eflags cs eip是否符合预期。
+            2. 检查ss selector和cs selector所选中的gdt descriptor的各个值是否符合预期，如dpl等等
+    2. 新建task如何与context switching结合，从而可以正常轮询到新建task
+        这里的难点在于：
+        switch_to会pop寄存器，如果想要通过switch_to切换运行的task，那么task的内核栈中需要预先push了寄存器
+        但是新建task的内核栈是空的，从而不能走switch_to后的pop寄存器的逻辑(绕过switch_to中的lable 1)
+        那么如何解决呢？
+        既然不能走lable 1的逻辑，那我们就新建一个逻辑，让新建task的第一次返回用户态直接iret回用户态。我们已经
+        知道，如果想iret，需要预先往栈中push ss esp eflags cs eip，未知的是esp和eip，也就是用户态的栈和用户态的ip寄存器。
+        那我们可以在新建task时，把这两个数据压入到内核栈中(kernel_stk -= 2)，然后在first_return_to_user时，把esp和eip给
+        拿出来，然后构造iret所需要的栈结构。
+
+## 实现要点记录
+    1. 没有使用tss进行基于硬件的切换，而是使用基于软件的context-switching.
+        原理是：手动保存寄存器到内核栈，然后保存内核栈的esp指针，该task被切换走再切换回来时，把该task的esp指针恢复，
+        也就等于恢复了之前保存的寄存器。
+    2.  使用tss进行context switching时，切换任务会导致自动切换内核栈。但是如果不使用tss，该如何切换内核栈呢？
+        在用户态陷入内核时，cpu会检测到这是一次特权级改变的操作，会自动根据tss->esp0切换内核栈，并且会把用户态的ss esp eflags cs eip压入内核栈
+    3. 新建task的第一次context switching时，会把用户态eip和esp保存到内核栈，然后jmp到first_return_to_user，从
+        内核栈取出esp和eip，然后构造iret所需要的栈结构，进行iret到用户态
+
+## Reference
+    1. https://www.maizure.org/projects/evolution_x86_context_switch_linux/
+    2. https://stackoverflow.com/questions/68946642/x86-hardware-software-tss-usage
+    3. https://forum.osdev.org/viewtopic.php?t=13678

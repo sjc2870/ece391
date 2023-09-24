@@ -1,10 +1,13 @@
+#define ASM
+
 #include "asm.h"
 #include "intr.h"
+#include "x86_desc.h"
 
 .section .text
 
 .global ignore_intr,intr_num
-.global generic_intr_handler
+.global generic_intr_handler, syscall_interrupt_entry, timer_interrupt_entry, first_return_to_user
 
 # reference chapter 6.12.1 (Exception- or Interrupt-Handler Procedures) volume 3 intel manual
 # After interruption or exception happened, there are 2 circumstances
@@ -90,7 +93,6 @@ MAKE_INTR_ENTRY_WITHOUT_ERRCODE 0x13
 MAKE_INTR_ENTRY_WITHOUT_ERRCODE 0x14
 MAKE_INTR_ENTRY_WITHOUT_ERRCODE 0x15
 
-MAKE_INTR_ENTRY_WITHOUT_ERRCODE PIC_TIMER_INTR
 MAKE_INTR_ENTRY_WITHOUT_ERRCODE PIC_KEYBOARD_INTR
 MAKE_INTR_ENTRY_WITHOUT_ERRCODE PIC_HARDISK_INTR
 MAKE_INTR_ENTRY_WITHOUT_ERRCODE PIC_SOFTDISK_INTR
@@ -98,7 +100,57 @@ MAKE_INTR_ENTRY_WITHOUT_ERRCODE PIC_PRINTER_INTR
 MAKE_INTR_ENTRY_WITHOUT_ERRCODE PIC_RTC_INTR
 MAKE_INTR_ENTRY_WITHOUT_ERRCODE PIC_MOUSE_INTR
 
-MAKE_INTR_ENTRY_WITHOUT_ERRCODE SYSCALL_INTR
+syscall_interrupt_entry:
+    pusha
+    pushl %ds
+    pushl %es
+    pushl %fs
+    pushl %gs
+    cld
+    pushl %esp
+    pushl %eax
+    call syscall_handler
+    # The above call instruction will overwrite esp regesiter, so we need restore esp using eax
+    movl %eax, %esp
+
+    popl %gs
+    popl %fs
+    popl %es
+    popl %ds
+    popa
+
+    iret
+
+timer_interrupt_entry:
+    pusha
+    pushl %ds
+    pushl %es
+    pushl %fs
+    pushl %gs
+
+    call timer_handler
+
+    popl %gs
+    popl %fs
+    popl %es
+    popl %ds
+    popa
+
+    iret
+
+# get eip and esp from stack, eip and esp have been pushed into stack in init_task()
+first_return_to_user:
+    movl -4(%esp), %eax # user stack
+    movl -8(%esp), %ebx # user eip
+    pushl $USER_DS
+    pushl %eax
+    pushfl
+    push $USER_CS
+    pushl %ebx
+    movl $0, %eax
+    movl $0, %ebx
+    iret
+
 
 .data
     intr_num: .long 0

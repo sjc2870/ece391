@@ -9,12 +9,12 @@
 #include "types.h"
 
 /* Segment selector values */
-#define KERNEL_CS   0x0010 // (idx-02, ti-0(GDT) cpl-0)
-#define KERNEL_DS   0x0018 // (idx-03, ti-0(GDT) cpl-0)
-#define USER_CS     0x0023 // (idx-04, ti-0(GDT) cpl-3)
-#define USER_DS     0x002B // (idx-05, ti-0(GDT) cpl-3)
-#define KERNEL_TSS  0x0030 // (idx-06, ti-0(GDT) cpl-0)
-#define KERNEL_LDT  0x0038 // (idx-07, ti-0(GDT) cpl-0)
+#define KERNEL_CS   0x0010 // (idx-02, ti-0(GDT) rpl-0)
+#define KERNEL_DS   0x0018 // (idx-03, ti-0(GDT) rpl-0)
+#define USER_CS     0x0023 // (idx-04, ti-0(GDT) rpl-3)
+#define USER_DS     0x002B // (idx-05, ti-0(GDT) rpl-3)
+#define KERNEL_TSS  0x0030 // (idx-06, ti-0(GDT) rpl-0)
+#define KERNEL_LDT  0x0038 // (idx-07, ti-0(GDT) rpl-0)
 
 /* Size of the task state segment (TSS) */
 #define TSS_SIZE    104

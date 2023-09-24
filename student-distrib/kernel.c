@@ -12,12 +12,11 @@
 #include "intr_def.h"
 #include "keyboard.h"
 #include "mm.h"
-#include "sched.h"
+#include "tasks.h"
 
 #define RUN_TESTS
 
-extern int syscall_handler();
-extern int timer_handler();
+extern void timer_handler();
 
 #define APIC_LOCAL_TIMER_ONESHOT_MODE  (0)
 #define APIC_LOCAL_TIMER_PERIODIC_MODE (1 << 17)
@@ -94,48 +93,6 @@ void entry(unsigned long magic, unsigned long addr)
         KERN_INFO("there are %u physical cores\n", cores);
     }
 
-    /* Construct an LDT entry in the GDT */
-    {
-        seg_desc_t the_ldt_desc;
-        the_ldt_desc.granularity = 0x0;
-        the_ldt_desc.opsize      = 0x1;
-        the_ldt_desc.reserved    = 0x0;
-        the_ldt_desc.avail       = 0x0;
-        the_ldt_desc.present     = 0x1;
-        the_ldt_desc.dpl         = 0x0;
-        the_ldt_desc.sys         = 0x0;
-        the_ldt_desc.type        = 0x2;
-
-        SET_LDT_PARAMS(the_ldt_desc, &ldt, ldt_size);
-        ldt_desc_ptr = the_ldt_desc;
-        lldt(KERNEL_LDT);
-    }
-
-    /* Construct a TSS entry in the GDT */
-    {
-        seg_desc_t the_tss_desc;
-        the_tss_desc.granularity   = 0x0;
-        the_tss_desc.opsize        = 0x0;
-        the_tss_desc.reserved      = 0x0;
-        the_tss_desc.avail         = 0x0;
-        the_tss_desc.seg_lim_19_16 = TSS_SIZE & 0x000F0000;
-        the_tss_desc.present       = 0x1;
-        the_tss_desc.dpl           = 0x0;
-        the_tss_desc.sys           = 0x0;
-        the_tss_desc.type          = 0x9;
-        the_tss_desc.seg_lim_15_00 = TSS_SIZE & 0x0000FFFF;
-
-        SET_TSS_PARAMS(the_tss_desc, &tss, tss_size);
-
-        tss_desc_ptr = the_tss_desc;
-
-        tss.ldt_segment_selector = KERNEL_LDT;
-        tss.ss0 = KERNEL_DS;
-        tss.esp0 = 0x800000;  // stack top 8MB
-        tss.cr3 = (unsigned long)init_pgtbl_dir;
-        ltr(KERNEL_TSS);
-    }
-
     if (detect_apic() == false)
         return;
     /* Init the PIC */
@@ -150,19 +107,19 @@ void entry(unsigned long magic, unsigned long addr)
         return;
     }
     clear();
-    sti();
     if (init_paging(addr)) {
         panic("paging init failed\n");
         return;
     }
     if (launch_tests() == false)
         panic("test failed\n");
-    enable_paging();
+    // enable_paging();
+    enable_irq(PIC_TIMER_INTR - PIC_MASTER_FIRST_INTR);
     if (init_sched()) {
         KERN_INFO("schedule init failed\n");
         return;
     }
-    self_test();
+    sti();
 
     /* Enable paging */
     while (1) ;

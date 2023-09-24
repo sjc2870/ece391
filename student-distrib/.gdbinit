@@ -1,9 +1,11 @@
 target remote 127.0.0.1:1234
-b start
 layout split
+set pagination off
+
+b start
 b entry
 b __panic
-b init_paging
-b test_alloc_pages
-b alloc_pages
-b free_pages
+b intr0xD_handler
+b init_sched
+b user0
+b timer_handler

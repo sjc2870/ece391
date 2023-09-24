@@ -41,4 +41,6 @@ extern pgd_t *init_pgtbl_dir;
 #define PS_BIT 7     // determine that if there is a 4M huge page, we always set to 0, means we disable 4M page
 #define GLOBAL_BIT 8 // global page. Not used
 
+#define page_fault_handler intr0xE_handler
+
 #endif
