@@ -68,7 +68,7 @@ int init_sched()
     tss.ss0 = KERNEL_DS;
     tss.esp0 = (unsigned long)(((char*)&task0) + STACK_SIZE);  // stack top
     tss.cs = KERNEL_CS;
-    // tss.cr3 = (unsigned long)init_pgtbl_dir;
+    // tss.cr3 = (unsigned long)init_pgtbl_dir; Can't enable paging yet, see kernel.c line 116
     ltr(KERNEL_TSS);
     __init_task(&task0, (unsigned long)user0, (unsigned long)&user_stk0, (unsigned long)(((char*)&task0) + STACK_SIZE));
     init_task(&task1, (unsigned long)user1, (unsigned long)&user_stk1, (unsigned long)(((char*)&task1) + STACK_SIZE));

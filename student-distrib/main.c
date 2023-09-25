@@ -65,7 +65,6 @@ static void self_test()
 
 void entry(unsigned long magic, unsigned long addr)
 {
-
     console_init();
     /*
      * Check if MAGIC is valid and print the Multiboot information structure
@@ -113,6 +112,8 @@ void entry(unsigned long magic, unsigned long addr)
     }
     if (launch_tests() == false)
         panic("test failed\n");
+    // Can't enable pgaing if test multi task that print 'A' and 'B' in turn, because user can't access supervisor-mode addresses
+    // See add_page_mapping, we set U/S bit to 0, which means this page is a supervisor page which user can't accesse
     // enable_paging();
     enable_irq(PIC_TIMER_INTR - PIC_MASTER_FIRST_INTR);
     if (init_sched()) {
