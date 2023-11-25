@@ -95,16 +95,35 @@ static inline void __page_bitmap_set(unsigned long addr, int slot, int bit)
     mem_bitmap[slot] |= (1 << bit);
 }
 
-void page_bitmap_set(void *addr, char order)
+static inline void __page_bitmap_clear(unsigned long addr, int slot, int bit)
+{
+    mem_bitmap[slot] &= ~(1 << bit);
+}
+
+void page_bitmap_set(void *addr, char order, char v)
 {
     int slot, bit, i;
     unsigned long adr = (unsigned long)addr;
 
     for (i = 0; i < (1 << order); ++i) {
         page_bitmap_get_location(adr, &slot, &bit);
-        __page_bitmap_set(adr, slot, bit);
+        if (v == 0) {
+            __page_bitmap_clear(adr, slot, bit);
+        } else {
+            __page_bitmap_set(adr, slot, bit);
+        }
         adr += PAGE_SIZE;
     }
+}
+
+void page_bitmap_set_busy(void *addr, char order)
+{
+    page_bitmap_set(addr, order, 1);
+}
+
+void page_bitmap_set_free(void *addr, char order)
+{
+    page_bitmap_set(addr, order, 0);
 }
 
 int page_bitmap_init(unsigned long addr)
@@ -414,21 +433,6 @@ int init_paging(unsigned long addr)
     return ret;
 }
 
-void *kmalloc(uint32_t size)
-{
-    cli();
-    return NULL;
-
-    sti();
-}
-
-void kfree()
-{
-    cli();
-
-    sti();
-}
-
 void enable_paging()
 {
     uint32_t regs[4] = {0};// rax rbx rcx rdx
@@ -504,7 +508,7 @@ void* alloc_pages(char order)
         }
         /* Found a free pages list */
         head = head->next;
-        page_bitmap_set(head, order);
+        page_bitmap_set_busy(head, order);
         if (cur_order != order)
             split_free_pages_list(cur_order, order);
         list_del(head);
@@ -556,6 +560,7 @@ void free_pages(void *addr, char order)
     phy_mm_stcutre.nr_free_pages[order]++;
     head = get_free_pages_head(order);
     list_add_tail(head, addr);
+    page_bitmap_set_free(addr, order);
     try_to_merge(pfn, order);
     sti();
 }
