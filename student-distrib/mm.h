@@ -4,6 +4,7 @@
 #include "multiboot.h"
 #include "types.h"
 #include "list.h"
+#include "liballoc.h"
 
 #define PAGE_SIZE 4096
 #define PAGE_MASK (PAGE_SIZE-1)
@@ -13,8 +14,6 @@
 #define MAX_ORDER (_MAX_ORDER+1)    // max free list is 4M(4K * 2^10)
 
 extern int init_paging(unsigned long addr);
-extern void* kmalloc(uint32_t size);
-extern void kfree();
 extern void enable_paging();
 
 extern void* alloc_pages(char order);

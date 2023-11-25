@@ -582,3 +582,26 @@ void page_fault_handler()
     asm volatile ("");
     KERN_INFO("page fault occured\n");
 }
+
+
+void liballoc_lock(unsigned long *flags)
+{
+    cli_and_save(*flags);
+}
+
+void liballoc_unlock(unsigned long flags)
+{
+    sti();
+    restore_flags(flags);
+}
+
+void* liballoc_alloc(size_t order)
+{
+    // return alloc_pages(order);
+    return NULL;
+}
+
+void liballoc_free(void *addr, size_t order)
+{
+    // free_pages(addr, order);
+}

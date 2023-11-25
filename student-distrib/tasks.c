@@ -92,7 +92,7 @@ int init_sched()
 
 void new_kthread(unsigned long addr)
 {
-    struct task_struct *task = kmalloc(sizeof(struct task_struct));
+    struct task_struct *task = NULL;
     if (!task) {
         panic("failed to malloc memory\n");
         return;
