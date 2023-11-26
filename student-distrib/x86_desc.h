@@ -9,6 +9,13 @@
 #include "types.h"
 
 /* Segment selector values */
+/* Type: 15         3 2 1 0
+        |------------------|
+            index    |T|RPL
+        byte 3-15: idx in gdt or ldt
+        byte 2   : table 0=gdt 1=ldt
+        byte 0-1 : RPL
+ */
 #define KERNEL_CS   0x0010 // (idx-02, ti-0(GDT) rpl-0)
 #define KERNEL_DS   0x0018 // (idx-03, ti-0(GDT) rpl-0)
 #define USER_CS     0x0023 // (idx-04, ti-0(GDT) rpl-3)

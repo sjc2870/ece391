@@ -7,5 +7,5 @@ b entry
 b __panic
 b intr0xD_handler
 b init_sched
-# b user0
-# b timer_handler
+b schedule
+b common_intr_entry

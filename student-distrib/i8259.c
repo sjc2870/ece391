@@ -91,6 +91,12 @@ void enable_irq(uint32_t irq_num) {
     uint16_t port;
     uint32_t value;
 
+    if (irq_num >= PIC_SLAVE_FIRST_INTR) {
+        irq_num -= PIC_SLAVE_FIRST_INTR;
+    } else {
+        irq_num -= PIC_MASTER_FIRST_INTR;
+    }
+
     if (irq_num & 8) {
         // slave
         port = PIC_SLAVE_DATA;

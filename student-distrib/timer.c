@@ -6,7 +6,7 @@
 
 static void __switch_to();
 
-#define update_tss(task) tss.esp0 = (unsigned long)(((char*)&task)+STACK_SIZE)
+#define update_tss(task) tss.esp0 = (unsigned long)(((char*)task)+STACK_SIZE)
 
 #define switch_to(cur,new) \
 do  {   \
@@ -31,7 +31,7 @@ do  {   \
          "popl %%es;"        \
          "popl %%ds;"        \
          "popa;"            \
-        :"=m"(cur.cpu_state.esp0), "=m"(cur.cpu_state.eip)     \
+        :"=m"(cur->cpu_state.esp0), "=m"(cur->cpu_state.eip)     \
         :"m"((new)->cpu_state.esp0), "m"((new)->cpu_state.eip) \
     );  \
 } while(0)
@@ -39,14 +39,12 @@ do  {   \
 void schedule()
 {
     cli();
-    if (current == &task0) {
-        current = &task1;
+    if (current() == task0) {
         update_tss(task1);
-        switch_to(task0, &task1);
-    } else if (current == &task1) {
-        current = &task0;
+        switch_to(task0, task1);
+    } else if (current() == task1) {
         update_tss(task0);
-        switch_to(task1, &task0);
+        switch_to(task1, task0);
     }
 }
 

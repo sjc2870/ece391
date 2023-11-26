@@ -597,11 +597,10 @@ void liballoc_unlock(unsigned long flags)
 
 void* liballoc_alloc(size_t order)
 {
-    // return alloc_pages(order);
-    return NULL;
+    return alloc_pages(order);
 }
 
 void liballoc_free(void *addr, size_t order)
 {
-    // free_pages(addr, order);
+    free_pages(addr, order);
 }

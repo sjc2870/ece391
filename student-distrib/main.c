@@ -115,7 +115,7 @@ void entry(unsigned long magic, unsigned long addr)
     // Can't enable pgaing if test multi task that print 'A' and 'B' in turn, because user can't access supervisor-mode addresses
     // See add_page_mapping, we set U/S bit to 0, which means this page is a supervisor page which user can't accesse
     // enable_paging();
-    enable_irq(PIC_TIMER_INTR - PIC_MASTER_FIRST_INTR);
+    enable_irq(PIC_TIMER_INTR);
     if (init_sched()) {
         KERN_INFO("schedule init failed\n");
         return;

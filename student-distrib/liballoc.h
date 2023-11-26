@@ -43,9 +43,9 @@ extern void* liballoc_alloc(size_t);
 extern void liballoc_free(void*,size_t);
 
 
-extern void    *malloc(size_t);				///< The standard function.
-extern void    *realloc(void *, size_t);		///< The standard function.
-extern void    *calloc(size_t, size_t);		///< The standard function.
-extern void     free(void *);					///< The standard function.
+extern void    *kmalloc(size_t);				///< The standard function.
+extern void    *krealloc(void *, size_t);		///< The standard function.
+extern void    *kcalloc(size_t, size_t);		///< The standard function.
+extern void     kfree(void *);					///< The standard function.
 
 #endif

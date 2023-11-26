@@ -255,9 +255,9 @@ void early_setup_idt()
 
     setup_intr_handler();
 
-    enable_irq(PIC_KEYBOARD_INTR - PIC_MASTER_FIRST_INTR);
-    // enable_irq(PIC_TIMER_INTR - PIC_MASTER_FIRST_INTR);
-    // enable_irq(PIC_MOUSE_INTR - PIC_MASTER_FIRST_INTR);
+    enable_irq(PIC_KEYBOARD_INTR);
+    // enable_irq(PIC_TIMER_INTR);
+    // enable_irq(PIC_MOUSE_INTR);
 }
 
 unsigned long generic_intr_handler(unsigned long intr_num, unsigned long esp)

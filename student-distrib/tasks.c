@@ -1,15 +1,15 @@
 #include "tasks.h"
 #include "lib.h"
 #include "x86_desc.h"
+#include "mm.h"
 
 extern void user0();
 extern void *user_stk0;
 extern void user1();
 extern void *user_stk1;
 extern void first_return_to_user();
-struct task_struct *current = NULL;
 
-struct task_struct task0, task1;
+struct task_struct *task0, *task1;
 
 void __init_task(struct task_struct *task, unsigned long eip, unsigned long user_stack, unsigned long kernel_stack)
 {
@@ -47,6 +47,11 @@ void init_task(struct task_struct *task, unsigned long eip, unsigned long user_s
     kernel_stk[1] = user_stack;
 }
 
+static struct task_struct* alloc_task()
+{
+    return alloc_pages(1);
+}
+
 int init_sched()
 {
     /* Construct a TSS entry in the GDT */
@@ -65,16 +70,21 @@ int init_sched()
     SET_TSS_PARAMS(the_tss_desc, &tss, tss_size);
     tss_desc_ptr = the_tss_desc;
 
+    task0 = alloc_task();
+    task1 = alloc_task();
+    if (!task0 || !task1) {
+        panic("alloc task failed\n");
+    }
+
+    tss.esp0 = (unsigned long)(((char*)task0) + STACK_SIZE);  // stack top
     tss.ss0 = KERNEL_DS;
-    tss.esp0 = (unsigned long)(((char*)&task0) + STACK_SIZE);  // stack top
     tss.cs = KERNEL_CS;
     // tss.cr3 = (unsigned long)init_pgtbl_dir; Can't enable paging yet, see kernel.c line 116
     ltr(KERNEL_TSS);
-    __init_task(&task0, (unsigned long)user0, (unsigned long)&user_stk0, (unsigned long)(((char*)&task0) + STACK_SIZE));
-    init_task(&task1, (unsigned long)user1, (unsigned long)&user_stk1, (unsigned long)(((char*)&task1) + STACK_SIZE));
-    current = &task0;
+    __init_task(task0, (unsigned long)user0, (unsigned long)&user_stk0, (unsigned long)(((char*)task0) + STACK_SIZE));
+    init_task(task1, (unsigned long)user1, (unsigned long)&user_stk1, (unsigned long)(((char*)task1) + STACK_SIZE));
     asm volatile ("pushfl;"
-                  "addl $0xffffbfff, %eax;" // clear busy flag
+                  "andl $0xffffbfff, %esp;" // clear busy flag
                   "popfl;"
                   "movl $user_stk0, %eax;"
                   "sti;"

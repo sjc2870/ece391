@@ -54,11 +54,21 @@ struct task_struct {
             struct regs cpu_state;
         };
     };
-};
+} __attribute__ ((aligned(STACK_SIZE)));
+
+static inline struct task_struct* current()
+{
+    int i = 0;
+    return (struct task_struct*)(((unsigned long)&i) & ~(STACK_SIZE-1));
+}
 
 extern int init_sched();
-extern struct task_struct *current;
-extern struct task_struct task0;
-extern struct task_struct task1;
+
+extern struct list running_tasks;
+extern struct list runnable_tasks;  // waiting for time slice
+extern struct list waiting_tasks;   // waiing for io or lock or something
+
+extern struct task_struct* task0;
+extern struct task_struct* task1;
 
 #endif
