@@ -51,6 +51,7 @@ struct task_struct {
             struct task_struct *parent;
             struct list task_list;
             char comm[16];
+            struct mm* mm;
 
             struct regs cpu_state;
         };

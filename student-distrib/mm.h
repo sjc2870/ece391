@@ -42,4 +42,8 @@ extern pgd_t *init_pgtbl_dir;
 
 #define page_fault_handler intr0xE_handler
 
+struct mm {
+    pgd_t *pgdir;    // top level pgdir
+};
+
 #endif

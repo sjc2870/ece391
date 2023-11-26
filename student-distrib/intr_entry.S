@@ -49,6 +49,7 @@ common_intr_entry:
     popl %es
     popl %ds
     popa
+    addl $4, %esp  # sub error code space
 
     iret
 
@@ -58,6 +59,7 @@ ENTRY(ignore_intr):
 .macro MAKE_INTR_ENTRY_WITHOUT_ERRCODE num
 ENTRY(intr\num\()_entry):
     movl $\num, (intr_num)
+    pushl $0
     jmp common_intr_entry
 .endm
 

@@ -32,6 +32,8 @@ void __init_task(struct task_struct *task, unsigned long eip, unsigned long user
     task->cpu_state.esp0 = kernel_stack;
     task->state = TASK_RUNNABLE;
     task->parent = NULL;
+    task->mm = alloc_page();
+    panic_on(task->mm == NULL, "allocate mm failed\n");
 }
 
 void init_task(struct task_struct *task, unsigned long eip, unsigned long user_stack, unsigned long kernel_stack)
@@ -62,6 +64,7 @@ static struct task_struct* alloc_task()
     return p;
 }
 
+extern char init_finish;
 int test_tasks()
 {
     /* Construct a TSS entry in the GDT */
@@ -98,12 +101,13 @@ int test_tasks()
     tss.esp0 = (unsigned long)(((char*)task0) + STACK_SIZE);  // stack top
     tss.ss0 = KERNEL_DS;
     tss.cs = KERNEL_CS;
-    // tss.cr3 = (unsigned long)init_pgtbl_dir; Can't enable paging yet, see kernel.c line 116
     ltr(KERNEL_TSS);
     __init_task(task0, (unsigned long)user0, (unsigned long)&user_stk0, (unsigned long)(((char*)task0) + STACK_SIZE));
     init_task(task1, (unsigned long)user1, (unsigned long)&user_stk1, (unsigned long)(((char*)task1) + STACK_SIZE));
     init_task(task2, (unsigned long)user2, (unsigned long)&user_stk2, (unsigned long)(((char*)task2) + STACK_SIZE));
+    tss.cr3 = (unsigned long)init_pgtbl_dir;
     list_add_tail(&running_tasks, &task0->task_list);
+    init_finish = 1;
     asm volatile ("pushfl;"
                   "andl $0xffffbfff, %esp;" // clear busy flag
                   "popfl;"

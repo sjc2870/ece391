@@ -2,6 +2,7 @@
 #include "lib.h"
 #include "errno.h"
 #include "multiboot.h"
+#include "tasks.h"
 #include "types.h"
 #include "vga.h"
 #include "list.h"
@@ -211,6 +212,7 @@ int page_bitmap_init(unsigned long addr)
     return 0;
 }
 
+extern char init_finish;
 /* @NOTE: caller must hold mm lock */
 int add_page_mapping(uint32_t linear_addr, uint32_t phy_addr)
 {
@@ -218,17 +220,24 @@ int add_page_mapping(uint32_t linear_addr, uint32_t phy_addr)
     uint32_t pde_offset = 0;
     pde_t pde;  // pde represents 4M size memory
     pte_t pte;  // pte represents 4K size memory
+    pgd_t *pgd = NULL;
+    if (!init_finish) {
+        pgd = init_pgtbl_dir;
+    } else {
+        pgd = current()->mm->pgdir;
+    }
 
+    panic_on(linear_addr % PAGE_SIZE, "linear address should be page aligned 0x%x", linear_addr);
 
     pgd_offset = get_bits(linear_addr, 22, 31);
     pde_offset = get_bits(linear_addr, 12, 21);
 
-    pde = (uint32_t)init_pgtbl_dir[pgd_offset];
+    pde = (uint32_t)pgd[pgd_offset];
     if (!pde) {
         pde = (uint32_t)alloc_pgdir();
         pde |= (1 << PRESENT_BIT);
         pde |= (1 << RW_BIT);
-        init_pgtbl_dir[pgd_offset] = (uint32_t)pde;
+        pgd[pgd_offset] = (uint32_t)pde;
     }
 
     pde &= ~(PAGE_MASK);
@@ -578,9 +587,15 @@ void free_page(void *addr)
 /* page fault, with error code  */
 void page_fault_handler()
 {
-    unsigned long addr;
-    asm volatile ("");
-    KERN_INFO("page fault occured\n");
+    unsigned long addr = 0;
+    asm volatile ("movl %%cr2, %0":"=r"(addr)::);
+    addr &= ~PAGE_MASK;
+    KERN_INFO("page fault occured addr: 0x%x\n", addr);
+    if (!init_finish) {
+        add_page_mapping(addr,addr);
+    } else {
+        void *p = alloc_page();
+    }
 }
 
 
