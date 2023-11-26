@@ -1,6 +1,7 @@
 #include "timer.h"
 #include "i8259.h"
 #include "intr.h"
+#include "list.h"
 #include "tasks.h"
 #include "x86_desc.h"
 
@@ -36,16 +37,33 @@ do  {   \
     );  \
 } while(0)
 
+extern char init_finish;
+
 void schedule()
 {
-    cli();
-    if (current() == task0) {
-        update_tss(task1);
-        switch_to(task0, task1);
-    } else if (current() == task1) {
-        update_tss(task0);
-        switch_to(task1, task0);
+    struct task_struct *cur = current();
+    struct task_struct *next = NULL;
+    struct list *list = NULL;
+    if (!init_finish) {
+        return;
     }
+
+    cli();
+    if (!list_empty(&runnable_tasks)) {
+        next = list_entry(runnable_tasks.next, struct task_struct, task_list);
+    } else {
+        next = cur;
+    }
+
+    list_del(&cur->task_list);
+    list_add_tail(&runnable_tasks, &cur->task_list);
+    cur->state = TASK_RUNNABLE;
+    list_del(&next->task_list);
+    list_add_tail(&running_tasks, &next->task_list);
+    next->state = TASK_RUNNING;
+
+    update_tss(next);
+    switch_to(cur, next);
 }
 
 void __switch_to()

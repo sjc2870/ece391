@@ -14,7 +14,7 @@
     .long -(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS)
 
 # Entrypoint to the kernel
-.globl start, _start
+.globl start, _start, halt
 
 .align 4
 start:

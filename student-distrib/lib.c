@@ -729,7 +729,7 @@ void __panic(int8_t *format, ...)
     }
 
     printf("    %s\n", buf);
-	asm volatile("int $15");
+	asm volatile("jmp halt");
     /* todo: reboot */
 }
 

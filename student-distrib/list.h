@@ -57,5 +57,7 @@ static inline int list_is_head(struct list *l1, struct list *l2)
 #define list_for_each(cur, head) \
     for(cur = (head)->next; !list_is_head(cur, (head)); cur = cur->next)
 
+#define list_entry(ptr, type, member)\
+    container_of(ptr, type, member)
 
 #endif

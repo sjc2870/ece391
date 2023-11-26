@@ -49,6 +49,7 @@ struct task_struct {
             volatile task_state state;
             pid_t pid;
             struct task_struct *parent;
+            struct list task_list;
             char comm[16];
 
             struct regs cpu_state;
@@ -62,13 +63,10 @@ static inline struct task_struct* current()
     return (struct task_struct*)(((unsigned long)&i) & ~(STACK_SIZE-1));
 }
 
-extern int init_sched();
+extern int test_tasks();
 
 extern struct list running_tasks;
 extern struct list runnable_tasks;  // waiting for time slice
 extern struct list waiting_tasks;   // waiing for io or lock or something
-
-extern struct task_struct* task0;
-extern struct task_struct* task1;
 
 #endif

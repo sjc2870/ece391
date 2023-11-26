@@ -17,6 +17,7 @@
 #define RUN_TESTS
 
 extern void timer_handler();
+char init_finish = 0;
 
 #define APIC_LOCAL_TIMER_ONESHOT_MODE  (0)
 #define APIC_LOCAL_TIMER_PERIODIC_MODE (1 << 17)
@@ -116,7 +117,8 @@ void entry(unsigned long magic, unsigned long addr)
     // See add_page_mapping, we set U/S bit to 0, which means this page is a supervisor page which user can't accesse
     // enable_paging();
     enable_irq(PIC_TIMER_INTR);
-    if (init_sched()) {
+    init_finish = 1;
+    if (test_tasks()) {
         KERN_INFO("schedule init failed\n");
         return;
     }

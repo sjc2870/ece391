@@ -1,5 +1,6 @@
 #include "tasks.h"
 #include "lib.h"
+#include "list.h"
 #include "x86_desc.h"
 #include "mm.h"
 
@@ -7,14 +8,19 @@ extern void user0();
 extern void *user_stk0;
 extern void user1();
 extern void *user_stk1;
+extern void user2();
+extern void *user_stk2;
 extern void first_return_to_user();
 
-struct task_struct *task0, *task1;
+struct list running_tasks;
+struct list runnable_tasks;  // waiting for time slice
+struct list waiting_tasks;   // waiing for io or lock or something
 
 void __init_task(struct task_struct *task, unsigned long eip, unsigned long user_stack, unsigned long kernel_stack)
 {
     memset(task, 0, sizeof(struct task_struct));
 
+    INIT_LIST(&task->task_list);
     task->cpu_state.cs = USER_CS;
     task->cpu_state.ds = USER_DS;
     task->cpu_state.es = USER_DS;
@@ -45,17 +51,25 @@ void init_task(struct task_struct *task, unsigned long eip, unsigned long user_s
     /* push eip/esp that iret needed, see first_return_to_user */
     kernel_stk[0] = eip;
     kernel_stk[1] = user_stack;
+    list_add_tail(&runnable_tasks, &task->task_list);
 }
 
 static struct task_struct* alloc_task()
 {
-    return alloc_pages(1);
+    void* p = alloc_pages(1);
+    panic_on((((unsigned long)p) % STACK_SIZE !=0), "struct task_struct must stack_size aligned\n");
+
+    return p;
 }
 
-int init_sched()
+int test_tasks()
 {
     /* Construct a TSS entry in the GDT */
     seg_desc_t the_tss_desc = {0};
+    struct task_struct *task0 = NULL;
+    struct task_struct *task1 = NULL;
+    struct task_struct *task2 = NULL;
+
     the_tss_desc.granularity   = 0x0;
     the_tss_desc.opsize        = 0x0;
     the_tss_desc.reserved      = 0x0;
@@ -70,9 +84,14 @@ int init_sched()
     SET_TSS_PARAMS(the_tss_desc, &tss, tss_size);
     tss_desc_ptr = the_tss_desc;
 
+    INIT_LIST(&runnable_tasks);
+    INIT_LIST(&waiting_tasks);
+    INIT_LIST(&running_tasks);
+
     task0 = alloc_task();
     task1 = alloc_task();
-    if (!task0 || !task1) {
+    task2 = alloc_task();
+    if (!task0 || !task1 || !task2) {
         panic("alloc task failed\n");
     }
 
@@ -83,6 +102,8 @@ int init_sched()
     ltr(KERNEL_TSS);
     __init_task(task0, (unsigned long)user0, (unsigned long)&user_stk0, (unsigned long)(((char*)task0) + STACK_SIZE));
     init_task(task1, (unsigned long)user1, (unsigned long)&user_stk1, (unsigned long)(((char*)task1) + STACK_SIZE));
+    init_task(task2, (unsigned long)user2, (unsigned long)&user_stk2, (unsigned long)(((char*)task2) + STACK_SIZE));
+    list_add_tail(&running_tasks, &task0->task_list);
     asm volatile ("pushfl;"
                   "andl $0xffffbfff, %esp;" // clear busy flag
                   "popfl;"

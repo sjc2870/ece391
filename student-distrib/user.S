@@ -3,6 +3,7 @@
 
 .global user0, user_stk0, kernel_stk0
 .global user1, user_stk1, kernel_stk1
+.global user2, user_stk2, kernel_stk2
 
 user0:
     mov %ss, %ax
@@ -33,3 +34,18 @@ user1:
 
     .fill 128,4,0
 user_stk1:
+
+user2:
+    mov %ss, %ax
+    mov %ax, %ds
+    mov %ax, %es
+    mov %ax, %fs
+    mov %ax, %gs
+    mov $67, %eax
+    int $0x80
+    mov $0xffff, %ecx
+3:  loop 3b
+    jmp user2
+
+    .fill 128,4,0
+user_stk2:
