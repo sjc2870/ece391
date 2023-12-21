@@ -1,0 +1,34 @@
+boot.o: boot.S multiboot.h x86_desc.h types.h
+intr_entry.o: intr_entry.S asm.h intr.h x86_desc.h types.h
+user.o: user.S x86_desc.h types.h
+x86_desc.o: x86_desc.S x86_desc.h types.h
+i8259.o: i8259.c i8259.h types.h lib.h intr.h
+intr.o: intr.c intr.h intr_def.h types.h keyboard.h mouse.h timer.h \
+ x86_desc.h i8259.h lib.h
+keyboard.o: keyboard.c lib.h types.h vga.h
+liballoc.o: liballoc.c liballoc.h types.h lib.h
+lib.o: lib.c lib.h types.h errno.h vga.h stdarg.h
+main.o: main.c mouse.h timer.h x86_desc.h types.h lib.h i8259.h debug.h \
+ tests.h tests/test_list.h tests/../types.h tests/test_mm.h vga.h \
+ intr_def.h intr.h keyboard.h mm.h multiboot.h list.h rwonce.h list_def.h \
+ container_of.h liballoc.h tasks.h
+mm.o: mm.c mm.h multiboot.h types.h list.h rwonce.h list_def.h \
+ container_of.h lib.h liballoc.h errno.h tasks.h x86_desc.h vga.h
+mouse.o: mouse.c lib.h types.h vga.h
+multiboot.o: multiboot.c multiboot.h types.h lib.h
+syscall.o: syscall.c i8259.h types.h lib.h
+tasks.o: tasks.c tasks.h mm.h multiboot.h types.h list.h rwonce.h \
+ list_def.h container_of.h lib.h liballoc.h x86_desc.h
+tests.o: tests.c tests.h tests/test_list.h tests/../types.h \
+ tests/test_mm.h x86_desc.h types.h lib.h
+timer.o: timer.c timer.h i8259.h types.h intr.h list.h rwonce.h \
+ list_def.h container_of.h lib.h tasks.h mm.h multiboot.h liballoc.h \
+ x86_desc.h
+vga.o: vga.c lib.h types.h vga.h
+test_list.o: tests/test_list.c tests/../list.h tests/../rwonce.h \
+ tests/../list_def.h tests/../container_of.h tests/../types.h \
+ tests/../lib.h
+test_mm.o: tests/test_mm.c tests/../types.h tests/../mm.h \
+ tests/../multiboot.h tests/../types.h tests/../list.h tests/../rwonce.h \
+ tests/../list_def.h tests/../container_of.h tests/../lib.h \
+ tests/../liballoc.h tests/../lib.h

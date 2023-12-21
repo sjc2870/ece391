@@ -59,6 +59,7 @@ bool launch_tests() {
 	// launch your tests here
     if (test_list() == false)
         return false;
+    test_paging();
     test_alloc_pages();
     return true;
 }

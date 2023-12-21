@@ -23,7 +23,7 @@ do  {   \
          "jmp %3;"      /* restore eip */   \
          /* "pushl %3"
             "jmp __switch_to;"
-            We cannot jmp __switch_to function, because the 'push %ebp; movl %esp %ebp' instrutions in function header
+            We cannot jmp __switch_to function, because 'push %ebp; movl %esp %ebp' instrutions in function header
             will corrupt the new task's stack.
             So we use jmp directly
           */ \
@@ -43,7 +43,6 @@ void schedule()
 {
     struct task_struct *cur = current();
     struct task_struct *next = NULL;
-    struct list *list = NULL;
     if (!init_finish) {
         return;
     }

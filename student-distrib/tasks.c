@@ -1,5 +1,6 @@
 #include "tasks.h"
 #include "lib.h"
+#include "liballoc.h"
 #include "list.h"
 #include "x86_desc.h"
 #include "mm.h"
@@ -15,6 +16,8 @@ extern void first_return_to_user();
 struct list running_tasks;
 struct list runnable_tasks;  // waiting for time slice
 struct list waiting_tasks;   // waiing for io or lock or something
+
+static unsigned long next_pid = 0;
 
 void __init_task(struct task_struct *task, unsigned long eip, unsigned long user_stack, unsigned long kernel_stack)
 {
@@ -87,10 +90,6 @@ int test_tasks()
     SET_TSS_PARAMS(the_tss_desc, &tss, tss_size);
     tss_desc_ptr = the_tss_desc;
 
-    INIT_LIST(&runnable_tasks);
-    INIT_LIST(&waiting_tasks);
-    INIT_LIST(&running_tasks);
-
     task0 = alloc_task();
     task1 = alloc_task();
     task2 = alloc_task();
@@ -124,10 +123,48 @@ int test_tasks()
     return 0;
 }
 
+static pid_t get_pid()
+{
+    pid_t ret;
+
+    cli();
+    ret = next_pid++;
+    sti();
+
+    return ret;
+}
+
+void init_tasks()
+{
+    struct task_struct *task0 = alloc_task();
+    INIT_LIST(&runnable_tasks);
+    INIT_LIST(&waiting_tasks);
+    INIT_LIST(&running_tasks);
+
+    current()->mm->pgdir = init_pgtbl_dir;
+    current()->state = TASK_RUNNING;
+    current()->parent = NULL;
+    current()->pid = get_pid();
+    list_add_tail(&running_tasks, &current()->task_list);
+    // current()->cpu_state.esp0 = alloc_page();
+}
+
+static int do_syscall_fork(struct task_struct *old, struct task_struct *new)
+{
+    int ret = 0;
+    if (!old || !new) {
+        panic("invalid args:%p %p\n", old, new);
+    }
+
+    new->pid = get_pid();
+    new->parent = old;
+
+    return ret;
+}
 
 void new_kthread(unsigned long addr)
 {
-    struct task_struct *task = NULL;
+    struct task_struct *task = alloc_task();
     if (!task) {
         panic("failed to malloc memory\n");
         return;

@@ -220,12 +220,7 @@ int add_page_mapping(uint32_t linear_addr, uint32_t phy_addr)
     uint32_t pde_offset = 0;
     pde_t pde;  // pde represents 4M size memory
     pte_t pte;  // pte represents 4K size memory
-    pgd_t *pgd = NULL;
-    if (!init_finish) {
-        pgd = init_pgtbl_dir;
-    } else {
-        pgd = current()->mm->pgdir;
-    }
+    pgd_t *pgd = current()->mm->pgdir;
 
     panic_on(linear_addr % PAGE_SIZE, "linear address should be page aligned 0x%x", linear_addr);
 
@@ -584,6 +579,11 @@ void free_page(void *addr)
     free_pages(addr, 0);
 }
 
+void copy_mm(struct task_struct *old, struct task_struct *new)
+{
+    new->mm->pgdir = alloc_pgdir();
+}
+
 /* page fault, with error code  */
 void page_fault_handler()
 {
@@ -594,6 +594,7 @@ void page_fault_handler()
     if (!init_finish) {
         add_page_mapping(addr,addr);
     } else {
+        // todo: here may be a infini loop
         void *p = alloc_page();
     }
 }

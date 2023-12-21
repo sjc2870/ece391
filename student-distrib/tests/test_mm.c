@@ -28,7 +28,7 @@ void test_paging()
     phy_addr |= pte_offset;
 
     if (phy_addr != linear_addr) {
-        printf("BUG: paging error\n");
+        panic("BUG: paging error\n");
     }
 }
 
